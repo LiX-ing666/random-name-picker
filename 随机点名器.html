@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>随机点名器</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23050505'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23ffffff' stroke-opacity='0.85' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='9' r='1.6' fill='%23ffffff'/%3E%3Ccircle cx='22' cy='19' r='1.6' fill='%23ffffff' fill-opacity='0.6'/%3E%3Ccircle cx='10' cy='19' r='1.6' fill='%23ffffff' fill-opacity='0.6'/%3E%3C/svg%3E">
+<style>
+/* ===== 基础：极简暗黑基调 ===== */
+:root{
+  --bg:#050505;
+  --ink:#FFFFFF;            /* 个性化字体颜色，JS 动态改写 */
+  --font-main:"PingFang SC","Microsoft YaHei","Source Han Sans SC","Noto Sans CJK SC",sans-serif;
+  --title-weight:600;
+  --result-weight:900;
+  --line:rgba(255,255,255,.28);
+  --line-soft:rgba(255,255,255,.14);
+  --panel:#0B0B0B;
+  --danger:#C0392B;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font-main);
+  overflow:hidden;
+  -webkit-user-select:none;user-select:none;
+}
+input,textarea,select,button{font-family:inherit}
+input,textarea{-webkit-user-select:text;user-select:text}
+
+/* ===== 主页面 ===== */
+#bgLayer{
+  position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-repeat:no-repeat;background-position:center;background-size:cover;
+  opacity:0;transition:opacity .25s;
+}
+#sphereCanvas{position:fixed;inset:0;display:block;z-index:1}
+#appTitle{
+  position:fixed;top:4vh;left:0;right:0;text-align:center;
+  font-size:28px;font-weight:var(--title-weight);letter-spacing:.1em;text-indent:.1em;
+  color:var(--ink);pointer-events:none;z-index:2;
+}
+#mainBtn{
+  position:fixed;left:50%;bottom:9vh;transform:translateX(-50%);z-index:3;
+  padding:12px 52px;border-radius:999px;
+  background:transparent;border:1px solid var(--ink);
+  color:var(--ink);font-size:16px;letter-spacing:.16em;text-indent:.16em;
+  cursor:pointer;transition:border-color .2s,background .2s,opacity .2s;
+}
+#mainBtn:hover{background:color-mix(in srgb,var(--ink) 8%,transparent)}
+#mainBtn:disabled{opacity:.4;cursor:default}
+#emptyHint{
+  position:fixed;left:0;right:0;bottom:5vh;text-align:center;z-index:2;
+  font-size:12px;color:var(--ink);opacity:.4;letter-spacing:.1em;display:none;
+}
+
+/* ===== 四周星星装饰（真机关蓝色，假星星随机彩色，形状一致） ===== */
+#decorLayer{position:fixed;inset:0;pointer-events:none;z-index:5}
+.decor{
+  position:absolute;pointer-events:auto;cursor:default;
+  color:rgba(255,255,255,.45); /* 清晰可见但克制，色调由 JS 改写 */
+  line-height:0;touch-action:manipulation;
+}
+.decor svg{display:block}
+.decor::after{content:'';position:absolute;inset:-12px} /* 隐形扩大触控热区，外观不变 */
+.decor:hover{color:inherit} /* 无任何 hover 反馈 */
+
+/* ===== 结果页：纯黑全屏覆盖 ===== */
+#resultOverlay{
+  position:fixed;inset:0;background:#000;z-index:40;
+  display:none;align-items:center;justify-content:center;
+}
+#resultOverlay.show{display:flex}
+#resultName{
+  color:#fff;font-weight:var(--result-weight);letter-spacing:.08em;
+  font-family:var(--font-main);
+  white-space:nowrap;line-height:1.1;text-align:center;
+}
+#resultName.enter{animation:nameIn .25s ease-out forwards}
+@keyframes nameIn{
+  from{transform:scale(.92);text-shadow:0 0 46px rgba(255,255,255,.85)}
+  to{transform:scale(1);text-shadow:0 0 0 rgba(255,255,255,0)}
+}
+.exitBtn{
+  position:fixed;top:50%;transform:translateY(-50%);z-index:41;
+  padding:14px 26px;background:rgba(192,57,43,.5);
+  border:1px solid rgba(255,255,255,.85);color:#fff;
+  font-size:15px;letter-spacing:.1em;text-indent:.1em;cursor:pointer;
+}
+.exitBtn.left{left:4vw}
+.exitBtn.right{right:4vw}
+.exitBtn.pulse{animation:exitPulse 1s ease-in-out infinite}
+@keyframes exitPulse{0%,100%{opacity:1}50%{opacity:.5}}
+
+/* ===== 密码框（遮罩 + 居中窄卡片） ===== */
+.mask{
+  position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:60;
+  display:none;align-items:center;justify-content:center;
+}
+.mask.show{display:flex}
+.pwCard{
+  width:320px;background:var(--panel);border:1px solid var(--line-soft);
+  padding:26px 26px 22px;
+}
+.pwTitle{
+  font-size:15px;letter-spacing:.18em;text-indent:.18em;text-align:center;
+  color:rgba(255,255,255,.85);margin-bottom:18px;cursor:default;
+}
+.pwInput{
+  width:100%;background:transparent;border:none;border-bottom:1px solid var(--line);
+  color:#fff;font-size:16px;padding:8px 2px;outline:none;letter-spacing:.12em;
+}
+.pwInput:focus{border-bottom-color:rgba(255,255,255,.6)}
+.pwErr{min-height:20px;font-size:12px;color:rgba(255,255,255,.45);margin:10px 0 6px;text-align:center}
+.pwActions{display:flex;gap:12px;justify-content:flex-end}
+.thinBtn{
+  background:transparent;border:1px solid var(--line);color:rgba(255,255,255,.85);
+  padding:7px 22px;font-size:13px;letter-spacing:.08em;text-indent:.08em;cursor:pointer;
+}
+.thinBtn:hover{border-color:rgba(255,255,255,.6)}
+.thinBtn:disabled{opacity:.4;cursor:default}
+
+/* ===== 设置面板 ===== */
+#settingsMask{
+  position:fixed;inset:0;background:#050505;z-index:50;
+  display:none;justify-content:center;overflow-y:auto;
+}
+#settingsMask.show{display:flex}
+#settingsPanel{width:min(720px,94vw);padding:0 10px 70px}
+.setHeader{
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:2;
+  padding:26px 0 14px;margin-bottom:4px;
+  background:rgba(5,5,5,.94);backdrop-filter:blur(6px);
+}
+.setHeader h2{font-size:17px;font-weight:600;letter-spacing:.16em;color:#fff}
+.setHeader .sub{font-size:11px;letter-spacing:.1em;color:rgba(255,255,255,.3);margin-left:14px;font-variant-numeric:tabular-nums}
+#settingsClose{background:none;border:none;color:rgba(255,255,255,.55);font-size:22px;line-height:1;cursor:pointer;padding:6px 10px;transition:color .15s}
+#settingsClose:hover{color:#fff}
+.tabs{display:flex;border-bottom:1px solid var(--line-soft);margin-bottom:26px}
+.tabBtn{
+  background:none;border:none;color:rgba(255,255,255,.42);
+  font-size:13px;letter-spacing:.14em;text-indent:.14em;padding:10px 26px;cursor:pointer;
+  border-bottom:1px solid transparent;margin-bottom:-1px;transition:color .18s,border-color .18s;
+}
+.tabBtn:hover{color:rgba(255,255,255,.8)}
+.tabBtn.active{color:#fff;border-bottom-color:#fff}
+.tabPage{display:none}
+.tabPage.active{display:block}
+.secBlock{
+  border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.015);
+  padding:22px 24px;margin-bottom:16px;transition:border-color .2s;
+}
+.secBlock:hover{border-color:rgba(255,255,255,.14)}
+.secBlock h3{
+  font-size:12px;font-weight:600;letter-spacing:.14em;color:rgba(255,255,255,.8);
+  margin-bottom:16px;display:flex;align-items:center;gap:10px;
+}
+.secBlock h3::before{content:'';width:16px;height:1px;background:rgba(255,255,255,.4);flex:0 0 auto}
+.ctlRow{display:flex;align-items:center;gap:14px;margin:14px 0;flex-wrap:wrap}
+.ctlRow label{flex:0 0 128px;font-size:12.5px;color:rgba(255,255,255,.62);letter-spacing:.06em}
+.ctlRow input[type=range]{
+  flex:1;min-width:140px;height:18px;background:transparent;cursor:pointer;
+  -webkit-appearance:none;appearance:none;
+}
+.ctlRow input[type=range]::-webkit-slider-runnable-track{height:1px;background:rgba(255,255,255,.22)}
+.ctlRow input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:#fff;
+  margin-top:-5px;box-shadow:0 0 0 1px rgba(255,255,255,.22);transition:transform .15s,box-shadow .15s;
+}
+.ctlRow input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.18);box-shadow:0 0 0 1px rgba(255,255,255,.5)}
+.ctlRow input[type=range]::-moz-range-track{height:1px;background:rgba(255,255,255,.22)}
+.ctlRow input[type=range]::-moz-range-thumb{width:11px;height:11px;border:none;border-radius:50%;background:#fff}
+.ctlVal{
+  flex:0 0 74px;text-align:right;font-size:12px;color:rgba(255,255,255,.82);
+  font-variant-numeric:tabular-nums;letter-spacing:.04em;
+}
+.ctlNote{font-size:11px;color:rgba(255,255,255,.32);margin:2px 0 6px 142px;letter-spacing:.05em}
+.ctlRow select,.ctlRow input[type=text],.ctlRow input[type=password]{
+  background:transparent;border:1px solid rgba(255,255,255,.22);color:#fff;
+  font-size:12.5px;padding:7px 10px;outline:none;letter-spacing:.05em;
+  transition:border-color .15s,background .15s;
+}
+.ctlRow input[type=text]:focus,.ctlRow input[type=password]:focus{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.03)}
+.ctlRow select{
+  appearance:none;-webkit-appearance:none;cursor:pointer;
+  padding-right:30px;
+  background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1 L5 5 L9 1' stroke='%23ffffff' stroke-opacity='0.5' fill='none' stroke-width='1'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;background-size:9px 6px;
+}
+.ctlRow select:hover{border-color:rgba(255,255,255,.42)}
+.ctlRow select option{background:#111;color:#fff}
+.ctlRow select:disabled{opacity:.35;cursor:default}
+.ctlRow input[type=color]{
+  width:46px;height:28px;padding:0;border:1px solid rgba(255,255,255,.25);background:transparent;cursor:pointer;
+}
+#rosterTextarea{
+  width:100%;height:112px;background:transparent;border:1px solid rgba(255,255,255,.18);
+  color:#fff;font-size:12.5px;line-height:1.8;padding:11px;outline:none;resize:vertical;
+  transition:border-color .15s;
+}
+#rosterTextarea:focus{border-color:rgba(255,255,255,.45)}
+.rosterBar{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+#rosterCount{font-size:12px;color:rgba(255,255,255,.5);margin-left:auto;font-variant-numeric:tabular-nums}
+.versionLine{font-size:13px;color:rgba(255,255,255,.85);margin-bottom:10px;font-variant-numeric:tabular-nums;letter-spacing:.1em}
+.featList{list-style:none;font-size:11.5px;color:rgba(255,255,255,.42);line-height:2}
+.featList li::before{content:"—";margin-right:10px;color:rgba(255,255,255,.22)}
+.msgLine{font-size:11.5px;color:rgba(255,255,255,.5);min-height:18px;margin-top:8px;letter-spacing:.05em}
+.fontPreview{
+  border:1px dashed rgba(255,255,255,.16);padding:16px 18px;margin:4px 0 14px 142px;
+  color:var(--ink);font-size:22px;letter-spacing:.12em;line-height:1.5;
+}
+.fontPreview small{display:block;font-size:10.5px;letter-spacing:.16em;color:rgba(255,255,255,.3);margin-top:8px}
+
+/* ===== 高级设置：概率管理 ===== */
+#advancedArea{display:none}
+#advancedArea.open{display:block}
+.probHead,.probRow{
+  display:grid;grid-template-columns:1fr 130px 90px 30px;gap:10px;align-items:center;
+  padding:6px 4px;font-size:13px;
+}
+.probHead{color:rgba(255,255,255,.4);font-size:12px;border-bottom:1px solid var(--line-soft)}
+.probList{max-height:300px;overflow-y:auto;border-bottom:1px solid var(--line-soft)}
+.probRow{border-bottom:1px solid rgba(255,255,255,.05)}
+.probRow .pName{color:rgba(255,255,255,.85);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.probRow select{background:transparent;border:1px solid var(--line);color:#fff;font-size:12px;padding:4px 6px;outline:none}
+.probRow select option{background:#111}
+.probRow .pPct{text-align:right;color:rgba(255,255,255,.6);font-variant-numeric:tabular-nums}
+.probRow .pDel{background:none;border:none;color:rgba(255,255,255,.35);cursor:pointer;font-size:14px}
+.probRow .pDel:hover{color:#fff}
+.probTotal{display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.55);padding:8px 4px}
+.addProbRow{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}
+.addProbRow input{flex:1;min-width:120px;background:transparent;border:1px solid var(--line);color:#fff;font-size:13px;padding:6px 8px;outline:none}
+.addProbRow select{background:transparent;border:1px solid var(--line);color:#fff;font-size:13px;padding:6px 8px;outline:none}
+.addProbRow select option{background:#111}
+@media (max-width:560px){
+  .ctlRow label{flex-basis:100%}
+  .ctlNote{margin-left:0}
+  .exitBtn{padding:10px 14px;font-size:13px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 主页面 ===== -->
+<div id="bgLayer"></div>
+<canvas id="sphereCanvas"></canvas>
+<h1 id="appTitle">随机点名器</h1>
+<button id="mainBtn" type="button">开始</button>
+<div id="emptyHint">名单为空，请通过隐藏入口进入设置导入名单</div>
+
+<!-- 四周星星装饰层：4 个蓝色机关星星（左上 / 左下 / 右中 / 右上）+ 随机彩色假星星 -->
+<div id="decorLayer" aria-hidden="true"></div>
+
+<!-- ===== 结果页 ===== -->
+<div id="resultOverlay">
+  <button class="exitBtn left" type="button">退出</button>
+  <div id="resultName"></div>
+  <button class="exitBtn right" type="button">退出</button>
+</div>
+
+<!-- ===== 密码框（通用 / 高级 复用同一卡片） ===== -->
+<div class="mask" id="pwMask">
+  <div class="pwCard">
+    <div class="pwTitle" id="pwTitle">密码</div>
+    <input class="pwInput" id="pwInput" type="password" autocomplete="off" inputmode="numeric">
+    <div class="pwErr" id="pwErr"></div>
+    <div class="pwActions">
+      <button class="thinBtn" id="pwCancel" type="button">取消</button>
+      <button class="thinBtn" id="pwOk" type="button">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 设置面板 ===== -->
+<div id="settingsMask">
+  <div id="settingsPanel">
+    <div class="setHeader">
+      <div style="display:flex;align-items:baseline">
+        <h2>设置</h2>
+        <span class="sub" id="setVersion">v1.6.3</span>
+      </div>
+      <button id="settingsClose" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="tabs">
+      <button class="tabBtn active" data-tab="general" type="button">通用</button>
+      <button class="tabBtn" data-tab="personal" type="button">个性化</button>
+    </div>
+
+    <!-- 通用 -->
+    <div class="tabPage active" id="tab-general">
+      <div class="secBlock">
+        <h3>抽取</h3>
+        <div class="ctlRow">
+          <label>转动速度</label>
+          <input type="range" id="cfgSpeed" min="0.5" max="3" step="0.1">
+          <span class="ctlVal" id="cfgSpeedVal"></span>
+        </div>
+        <div class="ctlRow">
+          <label>停止滑动圈数</label>
+          <input type="range" id="cfgGlide" min="0" max="10" step="0.5">
+          <span class="ctlVal" id="cfgGlideVal"></span>
+        </div>
+        <div class="ctlNote">0 = 点击「暂停」立即停住并出结果，无滑行</div>
+        <div class="ctlRow">
+          <label>结果停留时长</label>
+          <input type="range" id="cfgStay" min="3" max="60" step="1">
+          <span class="ctlVal" id="cfgStayVal"></span>
+        </div>
+      </div>
+
+      <div class="secBlock">
+        <h3>音效</h3>
+        <div class="ctlRow">
+          <label>抽奖音效</label>
+          <label style="flex:0 0 auto;display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.6)">
+            <input type="checkbox" id="cfgSound" style="accent-color:#fff;cursor:pointer"> 开启
+          </label>
+        </div>
+        <div class="ctlRow">
+          <label>音量</label>
+          <input type="range" id="cfgVolume" min="0" max="100" step="5">
+          <span class="ctlVal" id="cfgVolumeVal"></span>
+        </div>
+        <div class="ctlNote">抓鸭式倒计时：开始一声气口，转动全程「嘀嗒」越快越密、减速后逐渐变慢，出结果时一声低频冲击 + 中奖音；浏览器本地合成，无外部音频文件</div>
+        <div class="msgLine" id="soundMsg"></div>
+      </div>
+
+      <div class="secBlock">
+        <h3>名单管理</h3>
+        <textarea id="rosterTextarea" placeholder="粘贴名单：支持换行、逗号、顿号、空格分隔"></textarea>
+        <div class="rosterBar">
+          <button class="thinBtn" id="rosterApply" type="button">载入</button>
+          <button class="thinBtn" id="rosterFileBtn" type="button">上传 txt / csv</button>
+          <input type="file" id="rosterFile" accept=".txt,.csv" style="display:none">
+          <button class="thinBtn" id="rosterClear" type="button">清空</button>
+          <span id="rosterCount"></span>
+        </div>
+        <div class="ctlNote" style="margin:8px 0 0 0">支持换行 / 逗号 / 顿号 / 空格分隔；CSV 取每行第一列，自动跳过表头</div>
+      </div>
+
+      <div class="secBlock">
+        <h3>修改通用密码</h3>
+        <div class="ctlRow">
+          <label>旧密码</label>
+          <input type="password" id="oldGenPw" autocomplete="off">
+        </div>
+        <div class="ctlRow">
+          <label>新密码</label>
+          <input type="password" id="newGenPw" autocomplete="off">
+          <button class="thinBtn" id="genPwSave" type="button">保存</button>
+        </div>
+        <div class="msgLine" id="genPwMsg"></div>
+      </div>
+
+      <div class="secBlock">
+        <h3>机关手势</h3>
+        <div class="ctlRow">
+          <label>连点次数</label>
+          <select id="cfgGestureClicks">
+            <option value="1">1 次</option>
+            <option value="2">2 次</option>
+            <option value="3">3 次</option>
+          </select>
+          <span class="ctlVal" id="cfgGestureClicksNote" style="flex:0 0 auto;text-align:left;color:rgba(255,255,255,.4);font-size:11px">每颗星点几下</span>
+        </div>
+        <div class="ctlRow">
+          <label>要点击几个</label>
+          <select id="cfgGestureSteps">
+            <option value="1">1 颗</option>
+            <option value="2">2 颗</option>
+            <option value="3">3 颗</option>
+            <option value="4">4 颗</option>
+          </select>
+        </div>
+        <div id="gestureSeqRows"></div>
+        <div class="msgLine" id="gestureMsg"></div>
+        <div class="ctlNote" style="margin:8px 0 0 0">蓝色星星为机关，其余为彩色干扰；各步方位不能重复</div>
+      </div>
+
+      <div class="secBlock">
+        <h3>高级设置</h3>
+        <div class="ctlRow">
+          <button class="thinBtn" id="advOpenBtn" type="button">进入高级设置（独立密码）</button>
+        </div>
+        <div id="advancedArea">
+          <h3 style="margin-top:16px">概率管理</h3>
+          <div class="probHead"><span>姓名</span><span>档位</span><span style="text-align:right">实际概率</span><span></span></div>
+          <div class="probList" id="probList"></div>
+          <div class="probTotal"><span>合计校验</span><span id="probTotal">100%</span></div>
+          <div class="addProbRow">
+            <input type="text" id="extraNameInput" placeholder="名单外新人名（只参与概率，不上球体）">
+            <select id="extraTierSelect"></select>
+            <button class="thinBtn" id="extraAddBtn" type="button">添加</button>
+          </div>
+          <div class="ctlRow">
+            <button class="thinBtn" id="probClearBtn" type="button">一键清空全部概率（恢复等概率）</button>
+          </div>
+          <h3 style="margin-top:18px">修改高级密码（与通用密码独立）</h3>
+          <div class="ctlRow">
+            <label>旧高级密码</label>
+            <input type="password" id="oldAdvPw" autocomplete="off">
+          </div>
+          <div class="ctlRow">
+            <label>新高级密码</label>
+            <input type="password" id="newAdvPw" autocomplete="off">
+            <button class="thinBtn" id="advPwSave" type="button">保存</button>
+          </div>
+          <div class="msgLine" id="advPwMsg"></div>
+        </div>
+      </div>
+
+      <div class="secBlock">
+        <h3>版本</h3>
+        <div class="versionLine" id="versionLine">v1.6.3</div>
+        <ul class="featList">
+          <li>3D 人名球（Fibonacci 球面均匀分布，120 人 60fps）</li>
+          <li>无规则高速转动 + 可调圈数滑行减速</li>
+          <li>加权概率抽取（极高 / 高 / 默认 / 低 / 极低）</li>
+          <li>全屏大字结果页，自动返回，Esc / 空格兜底</li>
+          <li>彩色星星隐藏机关（真机关蓝色，假星星随机色）+ 双独立密码</li>
+          <li>名单粘贴 / 文件导入，配置 localStorage 持久化</li>
+          <li>v1.1.0：机关标记改为清晰星星，增加假星星迷惑项</li>
+          <li>v1.2.0：真机关星星固定蓝色，假星星随机彩色</li>
+          <li>v1.2.1：机关手势总窗口放宽至 10 秒，相邻点击间隔放宽至 2 秒</li>
+          <li>v1.2.2：机关手势总窗口再放宽至 20 秒，相邻点击间隔放宽至 4 秒</li>
+          <li>v1.2.3：修复 CSV 导入把表头与备注列当作人名的问题</li>
+          <li>v1.3.0：通用设置可配置手势连点次数、机关星数量与各步方位</li>
+          <li>v1.3.1：默认手势改为单击右侧中部蓝星 1 次</li>
+          <li>v1.4.0：新增字体族（黑体/宋体/楷体/幼圆/等宽）与标题、结果字重设置，设置面板同步美化</li>
+          <li>v1.5.0：收紧全局字距，新增背景颜色、背景图片导入与透明度调节</li>
+          <li>v1.5.1：修复提示文字与按钮重叠；字体颜色可自动适配背景亮度</li>
+          <li>v1.6.0：新增抽奖音效（转动滴答 / 暂停低音 / 中奖提示音），可开关与调音量</li>
+          <li>v1.6.1：转动改为低频气声，取消密集滴答；只在减速末段保留轻柔落点声</li>
+          <li>v1.6.2：撤掉转动气声与低鸣，改为开始一声气口 + 减速末段落点声</li>
+          <li>v1.6.3：转动改为放大的「嘀嗒」倒计时（高低交替），减速逐渐变慢，出结果加一声低频冲击</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 个性化 -->
+    <div class="tabPage" id="tab-personal">
+      <div class="secBlock">
+        <h3>背景装饰</h3>
+        <div class="ctlRow">
+          <label>装饰密度</label>
+          <select id="cfgDensity">
+            <option value="none">无</option>
+            <option value="minimal">极简</option>
+            <option value="standard">标准</option>
+          </select>
+        </div>
+        <div class="ctlNote">任何密度下机关星星都会保留；假星星为其他随机颜色</div>
+        <div class="ctlRow">
+          <label>背景颜色</label>
+          <input type="color" id="cfgBgColor">
+          <span class="ctlVal" id="cfgBgColorVal"></span>
+        </div>
+        <div class="ctlRow">
+          <label>背景图片</label>
+          <button class="thinBtn" id="bgUploadBtn" type="button">导入图片</button>
+          <button class="thinBtn" id="bgClearBtn" type="button">清除图片</button>
+          <input type="file" id="bgFile" accept="image/*" style="display:none">
+        </div>
+        <div class="ctlRow">
+          <label>图片不透明度</label>
+          <input type="range" id="cfgBgOpacity" min="0" max="100" step="1">
+          <span class="ctlVal" id="cfgBgOpacityVal"></span>
+        </div>
+        <div class="ctlNote" style="margin:8px 0 0 0">图片自动压缩到长边 1600px 内并本地保存；结果页仍为纯黑</div>
+        <div class="msgLine" id="bgMsg"></div>
+      </div>
+      <div class="secBlock">
+        <h3>字体</h3>
+        <div class="ctlRow">
+          <label>字体族</label>
+          <select id="cfgFontFamily">
+            <option value="sans">黑体（默认）</option>
+            <option value="serif">宋体</option>
+            <option value="kai">楷体</option>
+            <option value="yuan">幼圆</option>
+            <option value="mono">等宽</option>
+          </select>
+        </div>
+        <div class="fontPreview" id="fontPreview">字体预览 随机点名器<small>Aa 123 · 中考必胜</small></div>
+        <div class="ctlRow">
+          <label>字体颜色</label>
+          <input type="color" id="cfgColor">
+          <span class="ctlVal" id="cfgColorVal"></span>
+          <label style="flex:0 0 auto;display:flex;align-items:center;gap:6px;font-size:12px;color:rgba(255,255,255,.6)">
+            <input type="checkbox" id="cfgAutoInk" style="accent-color:#fff;cursor:pointer"> 自动适配背景
+          </label>
+        </div>
+        <div class="ctlRow">
+          <label>主页面标题字号</label>
+          <input type="range" id="cfgTitlePx" min="16" max="56" step="1">
+          <span class="ctlVal" id="cfgTitlePxVal"></span>
+        </div>
+        <div class="ctlRow">
+          <label>标题字重</label>
+          <input type="range" id="cfgTitleWeight" min="300" max="900" step="100">
+          <span class="ctlVal" id="cfgTitleWeightVal"></span>
+        </div>
+        <div class="ctlRow">
+          <label>结果姓名缩放</label>
+          <input type="range" id="cfgResultScale" min="0.6" max="1.4" step="0.05">
+          <span class="ctlVal" id="cfgResultScaleVal"></span>
+        </div>
+        <div class="ctlRow">
+          <label>结果姓名字重</label>
+          <input type="range" id="cfgResultWeight" min="300" max="900" step="100">
+          <span class="ctlVal" id="cfgResultWeightVal"></span>
+        </div>
+        <div class="ctlRow">
+          <label>球体名字字号</label>
+          <input type="range" id="cfgSpherePx" min="8" max="28" step="1">
+          <span class="ctlVal" id="cfgSpherePxVal"></span>
+        </div>
+      </div>
+      <div class="secBlock">
+        <h3>恢复</h3>
+        <div class="ctlRow">
+          <button class="thinBtn" id="personalReset" type="button">恢复默认（全部个性化项）</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ============================================================
+ * config：默认配置与持久化
+ * 所有可调数值集中在 DEFAULTS，避免魔法数字散落
+ * ============================================================ */
+const DEFAULTS = {
+  version: 'v1.6.3',
+  storageKey: 'rollcall.config.v1',
+  speed: 1,               // 转动速度倍率 0.5–3
+  glide: 2,               // 停止滑动圈数 0–10，步长 0.5
+  stay: 10,               // 结果停留秒数 3–60
+  pwGeneral: '123456789', // 通用密码
+  pwAdvanced: '123456789',// 高级独立密码
+  density: 'minimal',     // 装饰密度 none|minimal|standard
+  bgColor: '#050505',     // 背景颜色
+  bgOpacity: 35,          // 背景图片不透明度 0–100
+  fontColor: '#FFFFFF',
+  autoInk: true,          // 字体颜色自动适配背景亮度
+  fontFamily: 'sans',     // 字体族 sans|serif|kai|yuan|mono
+  titlePx: 28,            // 主页标题字号
+  titleWeight: 600,       // 标题字重
+  resultScale: 1,         // 结果姓名缩放倍率 0.6–1.4
+  resultWeight: 900,      // 结果姓名字重
+  spherePx: 14,           // 球体名字基准字号
+  baseOmega: 0.45,        // 待机自转角速度 rad/s
+  spinMin: 5, spinMax: 8, // 抽取时转速倍数范围
+  sphereRatio: 0.60,      // 球直径 / 视口短边（55%–65% 区间内）
+  trailAlpha: 0.5,        // 残影清除透明度（约 1–2 帧拖影）
+  resultCharVH: 0.30,     // 结果单字高度 ≈ 30% 视口高
+  resultMaxW: 0.60,       // 超长姓名压到 ≤60% 视口宽
+  pwMaxFails: 3,          // 连错次数上限
+  pwLockSec: 10,          // 锁定时长
+  gestureWindow: 20000,   // 机关手势总窗口 ms（20 秒）
+  gestureGap: 4000,       // 相邻点击最大间隔 ms
+  gestureClicks: 1,       // 每颗机关星连点次数 1–3（默认单击）
+  gestureSteps: 1,        // 依次点击几颗机关星 1–4（默认 1 颗）
+  gestureSeq: ['rm', 'tl', 'bl', 'tr'], // 依次点击的方位（默认右侧中部）
+  gestureDblGap: 450,     // 双击判定间隔 ms
+  titleResetClicks: 5,    // 「密码」标题连点重置次数
+  titleResetWindow: 3000, // 标题连点窗口 ms
+  decorAlpha: 0.85,       // 星星装饰亮度（彩色清晰可见）
+  sound: true,            // 抽奖音效开关
+  volume: 70,             // 音效音量 0–100
+  tickGapMin: 90,         // 倒计时嘀嗒最短间隔 ms
+  tickGapMax: 380,        // 倒计时嘀嗒最长间隔 ms
+  trapColor: '#4DA6FF',   // 真机关星星固定蓝色
+  fakeColors: ['#FF6B6B', '#FFD93D', '#6BCB77', '#B983FF', '#FF9F45', '#F473B9', '#E8E8E8', '#9E9E9E'], // 假星星随机取色（不含蓝）
+  tiers: { '极高': 8, '高': 4, '默认': 1, '低': 0.5, '极低': 0.1, '未设置': 1 }
+};
+const TIER_NAMES = ['极高', '高', '默认', '低', '极低', '未设置'];
+// 字体族：全部使用系统内置字体，离线可用
+const FONTS = {
+  sans: '"PingFang SC","Microsoft YaHei","Source Han Sans SC","Noto Sans CJK SC",sans-serif',
+  serif: '"Songti SC","SimSun","Noto Serif CJK SC","Source Han Serif SC",serif',
+  kai: '"Kaiti SC","KaiTi","STKaiti","楷体",serif',
+  yuan: '"YouYuan","Yuanti SC","幼圆","Microsoft YaHei",sans-serif',
+  mono: '"Consolas","Menlo","Courier New",monospace'
+};
+function fontStack() { return FONTS[cfg.fontFamily] || FONTS.sans; }
+
+// 背景图片单独存一个 key，避免每次保存配置都重复写入大字符串
+const BG_KEY = 'rollcall.bgimage.v1';
+let bgImage = null;
+let bgLum = 0.03; // 背景图片平均亮度（0–1），用于自动反色
+
+function relLum(hex) {
+  const v = parseInt(String(hex).slice(1), 16);
+  const r = ((v >> 16) & 255) / 255, g = ((v >> 8) & 255) / 255, b = (v & 255) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+// 自动适配：背景偏亮用深色字，偏暗用白字；有背景图时按不透明度加权平均亮度
+function effectiveInk() {
+  if (!cfg.autoInk) return cfg.fontColor;
+  let lum = relLum(cfg.bgColor);
+  if (bgImage) lum = lum * (1 - cfg.bgOpacity / 100) + bgLum * (cfg.bgOpacity / 100);
+  return lum > 0.55 ? '#111111' : '#FFFFFF';
+}
+function computeBgLum(dataUrl, onDone) {
+  if (!dataUrl) { bgLum = 0.03; if (onDone) onDone(); return; }
+  const img = new Image();
+  img.onload = () => {
+    const cv = document.createElement('canvas'); cv.width = 1; cv.height = 1;
+    const cx = cv.getContext('2d');
+    cx.drawImage(img, 0, 0, 1, 1);
+    const px = cx.getImageData(0, 0, 1, 1).data;
+    bgLum = (0.2126 * px[0] + 0.7152 * px[1] + 0.0722 * px[2]) / 255;
+    if (onDone) onDone();
+  };
+  img.onerror = () => { bgLum = 0.03; if (onDone) onDone(); };
+  img.src = dataUrl;
+}
+
+function applyBg() {
+  document.documentElement.style.setProperty('--bg', cfg.bgColor);
+  const layer = document.getElementById('bgLayer');
+  if (bgImage) {
+    layer.style.backgroundImage = 'url("' + bgImage + '")';
+    layer.style.opacity = String(Math.max(0, Math.min(100, cfg.bgOpacity)) / 100);
+  } else {
+    layer.style.backgroundImage = 'none';
+    layer.style.opacity = '0';
+  }
+}
+
+const cfg = {
+  speed: DEFAULTS.speed, glide: DEFAULTS.glide, stay: DEFAULTS.stay,
+  sound: DEFAULTS.sound, volume: DEFAULTS.volume,
+  pwGeneral: DEFAULTS.pwGeneral, pwAdvanced: DEFAULTS.pwAdvanced,
+  density: DEFAULTS.density,
+  bgColor: DEFAULTS.bgColor, bgOpacity: DEFAULTS.bgOpacity,
+  fontColor: DEFAULTS.fontColor, autoInk: DEFAULTS.autoInk, titlePx: DEFAULTS.titlePx,
+  fontFamily: DEFAULTS.fontFamily, titleWeight: DEFAULTS.titleWeight,
+  resultScale: DEFAULTS.resultScale, resultWeight: DEFAULTS.resultWeight, spherePx: DEFAULTS.spherePx,
+  roster: [], probs: {}, extras: []   // extras: [{name,tier}] 名单外概率项
+};
+cfg.gestureClicks = DEFAULTS.gestureClicks;
+cfg.gestureSteps = DEFAULTS.gestureSteps;
+cfg.gestureSeq = DEFAULTS.gestureSeq.slice();
+
+function saveCfg() {
+  try { localStorage.setItem(DEFAULTS.storageKey, JSON.stringify(cfg)); } catch (e) { /* 隐私模式等场景静默降级 */ }
+}
+function loadCfg() {
+  try {
+    const raw = localStorage.getItem(DEFAULTS.storageKey);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    for (const k of ['speed','glide','stay','sound','volume','pwGeneral','pwAdvanced','density','bgColor','bgOpacity','fontColor','autoInk','fontFamily','titlePx','titleWeight','resultScale','resultWeight','spherePx','gestureClicks','gestureSteps']) {
+      if (d[k] !== undefined && d[k] !== null) cfg[k] = d[k];
+    }
+    if (Array.isArray(d.gestureSeq) && d.gestureSeq.length) cfg.gestureSeq = d.gestureSeq.filter(x => typeof x === 'string').slice(0, 4);
+    if (Array.isArray(d.roster)) cfg.roster = d.roster.filter(x => typeof x === 'string');
+    if (d.probs && typeof d.probs === 'object') cfg.probs = d.probs;
+    if (Array.isArray(d.extras)) cfg.extras = d.extras.filter(x => x && typeof x.name === 'string');
+  } catch (e) { /* 损坏数据回退默认 */ }
+}
+
+/* ============================================================
+ * roster：名单管理（去重 / 去空白 / 分隔符解析 / 文件导入）
+ * ============================================================ */
+function parseRoster(text) {
+  const parts = String(text).split(/[\n\r,，、;；\s]+/);
+  const seen = new Set(); const out = [];
+  for (let p of parts) {
+    p = p.trim();
+    if (!p || seen.has(p)) continue;
+    seen.add(p); out.push(p);
+  }
+  return out;
+}
+// CSV：每行取第一列作为姓名，跳过常见表头，自动去重
+function parseCsv(text) {
+  const lines = String(text).split(/\r?\n/);
+  const seen = new Set(); const out = [];
+  let headerChecked = false;
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+    const cell = line.split(/[,，;；\t、]/)[0].replace(/^"|"$/g, '').trim();
+    if (!cell) continue;
+    if (!headerChecked) {
+      headerChecked = true;
+      if (/^(姓名|名字|学生|学生姓名|name|student)$/i.test(cell)) continue; // 表头行
+    }
+    if (seen.has(cell)) continue;
+    seen.add(cell); out.push(cell);
+  }
+  return out;
+}
+function defaultRoster() {
+  // 内置 120 人示例名单（演示数据，可在设置中整体替换）
+  const sur = ['王','李','张','刘','陈','杨','赵','黄','周','吴','徐','孙','马','朱','胡','郭','何','林','高','罗'];
+  const giv = ['子涵','浩然','欣怡','宇航','思远','雨桐','俊杰','若曦','明轩','诗琪','天翊','静怡','博文','梦洁','志强','嘉懿','文昊','紫萱','立诚','语嫣',
+               '一鸣','沐宸','奕辰','芷若','景行','清扬','书瑶','承宇','念真','望舒'];
+  const out = []; const seen = new Set();
+  for (let i = 0; i < sur.length && out.length < 120; i++) {
+    for (let j = 0; j < giv.length && out.length < 120; j++) {
+      const n = sur[i] + giv[(i * 7 + j) % giv.length];
+      if (!seen.has(n)) { seen.add(n); out.push(n); }
+    }
+  }
+  return out;
+}
+function setRoster(list) {
+  cfg.roster = list;
+  // 清理已不在名单中的概率项（名单外 extras 保留）
+  const inRoster = new Set(list);
+  for (const k of Object.keys(cfg.probs)) if (!inRoster.has(k)) delete cfg.probs[k];
+  saveCfg();
+  sphere.rebuild();          // 名单变更后 1 帧内重建
+  updateRosterUI();
+  if (advancedUnlocked) renderProbList();
+}
+function updateRosterUI() {
+  const c = document.getElementById('rosterCount');
+  c.textContent = '已载入 ' + cfg.roster.length + ' 人';
+  document.getElementById('emptyHint').style.display = cfg.roster.length ? 'none' : 'block';
+}
+
+/* ============================================================
+ * sfx：抽奖音效（Web Audio 本地合成，无外部文件）
+ * 开始一声气口 → 转动期间静音 → 减速末段轻柔落点声 → 中奖三音阶
+ * ============================================================ */
+const sfx = (() => {
+  let ctx = null, master = null, noiseBuf = null, lastTickAt = 0;
+
+  function ensure() {
+    if (!cfg.sound) return null;
+    try {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+        master = ctx.createGain();
+        master.connect(ctx.destination);
+      }
+      if (ctx.state === 'suspended') ctx.resume();
+      master.gain.value = Math.max(0, Math.min(1, cfg.volume / 100));
+      return ctx;
+    } catch (e) { return null; }
+  }
+
+  function noiseBuffer() {
+    if (noiseBuf) return noiseBuf;
+    const sr = ctx.sampleRate, n = Math.round(sr * 0.6);
+    noiseBuf = ctx.createBuffer(1, n, sr);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    return noiseBuf;
+  }
+
+  // 单个音：频率、时长、波形、音量、是否滑音
+  function tone(freq, dur, o) {
+    const c = ensure(); if (!c) return;
+    o = o || {};
+    const t0 = c.currentTime + (o.delay || 0);
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    if (o.slideTo) osc.frequency.exponentialRampToValueAtTime(o.slideTo, t0 + dur);
+    const peak = o.gain == null ? 0.16 : o.gain;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + (o.attack || 0.008));
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g); g.connect(master);
+    osc.start(t0); osc.stop(t0 + dur + 0.03);
+  }
+
+  // 开始气口：带通噪声由低扫到高，0.5 秒收干净，像抽签桶被摇起来
+  function whoosh() {
+    const c = ensure(); if (!c) return;
+    const t = c.currentTime;
+    const src = c.createBufferSource(); src.buffer = noiseBuffer();
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.3;
+    const g = c.createGain();
+    bp.frequency.setValueAtTime(240, t);
+    bp.frequency.exponentialRampToValueAtTime(1150, t + 0.42);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.13, t + 0.11);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    src.connect(bp); bp.connect(g); g.connect(master);
+    src.start(t); src.stop(t + 0.62);
+  }
+
+  // 定时炸弹式「嘀嗒」：高音 tick / 低音 tock 交替，音量提亮
+  let tockFlip = false;
+  function clockTick(loud) {
+    tockFlip = !tockFlip;
+    const base = tockFlip ? 880 : 610;               // 嘀 / 嗒 两个音高
+    const gain = (loud ? 0.16 : 0.12) * (0.92 + Math.random() * 0.16);
+    tone(base, 0.075, { type: 'sine', gain: gain, attack: 0.003 });
+    tone(base * 2.02, 0.035, { type: 'triangle', gain: gain * 0.35, attack: 0.002 }); // 金属短促头音
+  }
+  // 出结果时的引爆式低频冲击（配合中奖音）
+  function boom() {
+    const c = ensure(); if (!c) return;
+    const t = c.currentTime;
+    tone(150, 0.42, { type: 'sine', gain: 0.34, slideTo: 58 });
+    const src = c.createBufferSource(); src.buffer = noiseBuffer();
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420; lp.Q.value = 0.8;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.30, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.34);
+    src.connect(lp); lp.connect(g); g.connect(master);
+    src.start(t); src.stop(t + 0.4);
+  }
+  function click() {
+    tone(300, 0.10, { type: 'sine', gain: 0.10, slideTo: 220 });
+  }
+  // 按下暂停：低沉收束
+  function stopHit() {
+    tone(160, 0.24, { type: 'sine', gain: 0.24, slideTo: 85 });
+  }
+  function win() {
+    // 中奖：上行三音阶 + 高音闪光
+    tone(523.25, 0.42, { type: 'sine', gain: 0.26, delay: 0.02 });
+    tone(659.25, 0.42, { type: 'sine', gain: 0.26, delay: 0.13 });
+    tone(783.99, 0.62, { type: 'sine', gain: 0.28, delay: 0.24 });
+    tone(1046.5, 0.30, { type: 'triangle', gain: 0.16, delay: 0.36 });
+  }
+  function unlock() {
+    tone(880, 0.10, { type: 'sine', gain: 0.14 });
+    tone(1320, 0.16, { type: 'sine', gain: 0.14, delay: 0.10 });
+  }
+  function error() {
+    tone(196, 0.16, { type: 'square', gain: 0.10, slideTo: 140 });
+  }
+
+  // 每帧驱动：转动与减速全程「嘀嗒」倒计时，越快越密、越慢越疏
+  function motion(now, omegaAbs, state) {
+    if (state === 'spinning') {
+      const gap = Math.max(DEFAULTS.tickGapMin, Math.min(140, 1000 / (omegaAbs * 2.6 + 0.2)));
+      if (now - lastTickAt >= gap) { lastTickAt = now; clockTick(true); }
+      return;
+    }
+    if (state === 'decelerating') {
+      const gap = Math.max(110, Math.min(DEFAULTS.tickGapMax, 1000 / (omegaAbs * 2.2 + 0.18)));
+      if (now - lastTickAt >= gap) { lastTickAt = now; clockTick(false); }
+      return;
+    }
+    lastTickAt = 0;   // idle / result：停止倒计时
+  }
+
+  return { whoosh, boom, click, stopHit, win, unlock, error, motion, get audioState() { return ctx ? ctx.state : 'none'; } };
+})();
+
+/* ============================================================
+ * sphere：Canvas 2D 球体渲染与动画（Fibonacci 球面采样）
+ * 状态机：idle → spinning → decelerating → result → idle
+ * ============================================================ */
+const sphere = (() => {
+  const canvas = document.getElementById('sphereCanvas');
+  const ctx = canvas.getContext('2d');
+  let W = 0, H = 0, dpr = 1, R = 100;
+  let points = [];                 // 单位球面坐标 [{x,y,z,name}]
+  let angleY = 0, tiltX = 0.32;
+  let state = 'idle';
+  let omega = DEFAULTS.baseOmega;  // 当前角速度（带符号）
+  let spinDir = 1, spinMult = 6, noiseV = 0;
+  let nextFlipAt = 0, pulseT = 0;
+  let decel = null;                // {t0,dur,delta,a0,wobble0}
+  let lastT = performance.now();
+  let dirty = true;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    R = Math.min(W, H) * DEFAULTS.sphereRatio / 2;
+    // 清空画布（透明），背景由 CSS 层承担
+    ctx.clearRect(0, 0, W, H);
+  }
+
+  function rebuild() {
+    const n = cfg.roster.length;
+    points = [];
+    // 打乱名字与球面点的对应关系，避免同姓/相邻名单聚簇
+    const names = cfg.roster.slice();
+    for (let i = n - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = names[i]; names[i] = names[j]; names[j] = t;
+    }
+    const GA = Math.PI * (3 - Math.sqrt(5)); // 黄金角
+    for (let i = 0; i < n; i++) {
+      const y = n === 1 ? 0 : 1 - (i / (n - 1)) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const th = GA * i;
+      points.push({ x: Math.cos(th) * r, y, z: Math.sin(th) * r, name: names[i] });
+    }
+    dirty = true;
+  }
+
+  function start() {
+    if (state !== 'idle' || !cfg.roster.length && !cfg.extras.length) return false;
+    state = 'spinning';
+    spinDir = Math.random() < 0.5 ? -1 : 1;
+    spinMult = DEFAULTS.spinMin + Math.random() * (DEFAULTS.spinMax - DEFAULTS.spinMin);
+    noiseV = 0; pulseT = 0;
+    nextFlipAt = performance.now() + 300 + Math.random() * 700;
+    return true;
+  }
+
+  function pause(now) {
+    if (state !== 'spinning') return;
+    if (cfg.glide <= 0) { sfx.click(); finish(); return; }   // 圈数 0：立即停住出结果
+    state = 'decelerating';
+    sfx.stopHit();
+    const dur = Math.max(0.55, cfg.glide * 0.55) * 1000;
+    const dir = omega >= 0 ? 1 : -1;
+    decel = { t0: now, dur, delta: dir * cfg.glide * Math.PI * 2, a0: angleY, wobble0: 1 };
+  }
+
+  function finish() {
+    state = 'result';
+    decel = null;
+    const name = picker.pick();
+    result.show(name);
+  }
+
+  function backToIdle() {
+    state = 'idle';
+    omega = DEFAULTS.baseOmega * cfg.speed * (omega >= 0 ? 1 : -1);
+  }
+
+  function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    const base = DEFAULTS.baseOmega * cfg.speed;
+
+    if (state === 'idle') {
+      // 缓慢自转：Y 轴为主 + 轻微 X 倾斜摆动
+      omega += (base * Math.sign(omega || 1) - omega) * Math.min(1, dt * 2);
+      angleY += omega * dt;
+      tiltX = 0.32 + Math.sin(now / 4300) * 0.06;
+    } else if (state === 'spinning') {
+      // 无规则运动：随机方向翻转 + 速度噪声 + 半径微脉动
+      if (now >= nextFlipAt) {
+        if (Math.random() < 0.55) spinDir = -spinDir;
+        spinMult = DEFAULTS.spinMin + Math.random() * (DEFAULTS.spinMax - DEFAULTS.spinMin);
+        nextFlipAt = now + 280 + Math.random() * 820;
+      }
+      noiseV += (Math.random() - 0.5) * 14 * dt;
+      noiseV *= 0.965;
+      const target = spinDir * base * spinMult * (1 + noiseV * 0.18);
+      omega += (target - omega) * Math.min(1, dt * 6);
+      angleY += omega * dt;
+      pulseT += dt;
+      tiltX = 0.32 + Math.sin(now / 260) * 0.22 + Math.sin(now / 97) * 0.07;
+    } else if (state === 'decelerating' && decel) {
+      const p = Math.min(1, (now - decel.t0) / decel.dur);
+      angleY = decel.a0 + decel.delta * easeOutCubic(p);
+      omega = decel.delta * 3 * Math.pow(1 - p, 2) / (decel.dur / 1000);
+      tiltX = 0.32 + Math.sin(now / 260) * 0.22 * (1 - p);
+      if (p >= 1) { finish(); }
+    }
+    sfx.motion(now, Math.abs(omega), state);
+    draw(now);
+    requestAnimationFrame(frame);
+  }
+
+  function draw(now) {
+    // 用 destination-out 逐帧淡出，保证背景（颜色/图片）透出且保留 1–2 帧拖影
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0,0,0,' + DEFAULTS.trailAlpha + ')';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over';
+    if (!points.length) {
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.font = '14px ' + fontStack();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('名单为空', W / 2, H / 2);
+      return;
+    }
+    const rPulse = state === 'spinning'
+      ? 1 + 0.022 * Math.sin(pulseT * 7.3) + 0.012 * Math.sin(pulseT * 13.7)
+      : 1;
+    const rr = R * rPulse;
+    const cy = Math.cos(angleY), sy = Math.sin(angleY);
+    const cx = Math.cos(tiltX), sx = Math.sin(tiltX);
+    const cxp = W / 2, cyp = H / 2;
+    const proj = [];
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      // Y 轴旋转
+      const x1 = p.x * cy + p.z * sy;
+      const z1 = -p.x * sy + p.z * cy;
+      // X 轴倾斜
+      const y2 = p.y * cx - z1 * sx;
+      const z2 = p.y * sx + z1 * cx;
+      const depth = (z2 + 1) / 2;                 // 0 背面 – 1 正面
+      const persp = 0.82 + 0.30 * depth;          // 近大远小
+      proj.push({ sx: cxp + x1 * rr * persp, sy: cyp + y2 * rr * persp, d: depth, name: p.name });
+    }
+    proj.sort((a, b) => a.d - b.d);               // 背面先画
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const col = effectiveInk();
+    const rgb = hexToRgb(col);
+    let lastFont = '';
+    for (let i = 0; i < proj.length; i++) {
+      const q = proj[i];
+      const size = Math.max(6, Math.round(cfg.spherePx * (0.55 + 0.75 * q.d)));
+      const alpha = 0.10 + 0.90 * Math.pow(q.d, 1.6); // 背面显著降透明
+      const f = size + 'px ' + fontStack();
+      if (f !== lastFont) { ctx.font = f; lastFont = f; }
+      ctx.fillStyle = 'rgba(' + rgb + ',' + alpha.toFixed(3) + ')';
+      ctx.fillText(q.name, q.sx, q.sy);
+    }
+  }
+
+  function hexToRgb(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+    if (!m) return '255,255,255';
+    const v = parseInt(m[1], 16);
+    return ((v >> 16) & 255) + ',' + ((v >> 8) & 255) + ',' + (v & 255);
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(t => { lastT = t; requestAnimationFrame(frame); });
+
+  return { rebuild, start, pause, backToIdle, get state() { return state; } };
+})();
+
+/* ============================================================
+ * picker：加权随机抽取（名单 + 名单外概率项）
+ * ============================================================ */
+const picker = (() => {
+  function weightOf(name) {
+    const t = cfg.probs[name];
+    return (t && DEFAULTS.tiers[t] !== undefined) ? DEFAULTS.tiers[t] : 1;
+  }
+  function pool() {
+    const list = cfg.roster.slice();
+    const seen = new Set(list);
+    for (const e of cfg.extras) if (!seen.has(e.name)) { seen.add(e.name); list.push(e.name); }
+    return list;
+  }
+  function pick() {
+    const list = pool();
+    if (!list.length) return '（名单为空）';
+    let total = 0;
+    const ws = list.map(n => { const w = weightOf(n); total += w; return w; });
+    let r = Math.random() * total;
+    for (let i = 0; i < list.length; i++) { r -= ws[i]; if (r < 0) return list[i]; }
+    return list[list.length - 1];
+  }
+  return { pick, pool, weightOf };
+})();
+
+/* ============================================================
+ * result：全屏大字结果页（10s 自动返回 / Esc / 空格兜底）
+ * ============================================================ */
+const result = (() => {
+  const overlay = document.getElementById('resultOverlay');
+  const nameEl = document.getElementById('resultName');
+  const exits = overlay.querySelectorAll('.exitBtn');
+  let hideTimer = null, pulseTimer = null;
+
+  function fitFont() {
+    // 单字高度 ≈30% 视口高 × 缩放倍率；超长姓名压到 ≤60% 视口宽且保持一行
+    let px = window.innerHeight * DEFAULTS.resultCharVH * cfg.resultScale;
+    nameEl.style.fontSize = px + 'px';
+    const maxW = window.innerWidth * DEFAULTS.resultMaxW;
+    const w = nameEl.getBoundingClientRect().width;
+    if (w > maxW) {
+      px = px * maxW / w;
+      nameEl.style.fontSize = px + 'px';
+    }
+  }
+  function show(name) {
+    nameEl.textContent = name;            // textContent 渲染，防 XSS
+    overlay.classList.add('show');
+    nameEl.classList.remove('enter');
+    void nameEl.offsetWidth;              // 重启入场动画
+    fitFont();
+    nameEl.classList.add('enter');
+    sfx.boom();                          // 倒计时归零的低频冲击
+    sfx.win();
+    mainBtn.disabled = true;
+    const stayMs = cfg.stay * 1000;
+    hideTimer = setTimeout(hide, stayMs);
+    pulseTimer = setTimeout(() => exits.forEach(b => b.classList.add('pulse')), Math.max(0, stayMs - 3000));
+  }
+  function hide() {
+    if (!overlay.classList.contains('show')) return;
+    clearTimeout(hideTimer); clearTimeout(pulseTimer);
+    overlay.classList.remove('show');
+    exits.forEach(b => b.classList.remove('pulse'));
+    mainBtn.disabled = false;
+    sphere.backToIdle();
+    syncMainBtn();
+  }
+  exits.forEach(b => b.addEventListener('click', hide));
+  window.addEventListener('resize', () => { if (overlay.classList.contains('show')) fitFont(); });
+  return { show, hide, get visible() { return overlay.classList.contains('show'); } };
+})();
+
+/* ============================================================
+ * secret：隐藏机关手势 + 密码框（双保险）
+ * ============================================================ */
+const secret = (() => {
+  const layer = document.getElementById('decorLayer');
+  // 8 个可选方位：机关星星按设置从中选取，其余位置作为假星星
+  const POSITIONS = {
+    tl: { x: 3,    y: 5,  label: '左上' },
+    tr: { x: 97,   y: 5,  label: '右上' },
+    bl: { x: 3,    y: 95, label: '左下' },
+    br: { x: 97,   y: 95, label: '右下' },
+    lm: { x: 2.4,  y: 50, label: '左侧中部' },
+    rm: { x: 97.6, y: 50, label: '右侧中部' },
+    tm: { x: 50,   y: 3,  label: '顶部中间' },
+    bm: { x: 50,   y: 97, label: '底部中间' }
+  };
+  // 极简密度下的额外假星星（只作干扰，不参与机关）
+  const FAKE_EXTRA = [{ x: 25, y: 7 }, { x: 75, y: 7 }, { x: 25, y: 93 }, { x: 75, y: 93 }];
+  // 标准密度再追加一圈假星星
+  const FAKE_STANDARD = [];
+  for (let i = 1; i <= 4; i++) {
+    FAKE_STANDARD.push({ x: 3 + i * 18.8, y: 3  });
+    FAKE_STANDARD.push({ x: 3 + i * 18.8, y: 97 });
+    FAKE_STANDARD.push({ x: 2.4,  y: 5 + i * 18 });
+    FAKE_STANDARD.push({ x: 97.6, y: 5 + i * 18 });
+  }
+  let step = 0, clicks = 0, lastClick = 0, firstClick = 0;
+
+  // 当前生效的手势序列（按设置取方位，至少 1 步）
+  function activeSeq() {
+    const ids = (cfg.gestureSeq || []).filter(id => POSITIONS[id]);
+    return ids.length ? ids.slice(0, cfg.gestureSteps) : ['rm'];
+  }
+
+  function hexRgb(hex) {
+    const v = parseInt(hex.slice(1), 16);
+    return ((v >> 16) & 255) + ',' + ((v >> 8) & 255) + ',' + (v & 255);
+  }
+
+  function starSvg() {
+    // 所有星星共用同一形状，仅颜色区分：机关（序列内）蓝色，假星星随机其他色
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('width', '16'); s.setAttribute('height', '16');
+    s.setAttribute('viewBox', '0 0 18 18');
+    const el = document.createElementNS(s.namespaceURI, 'path');
+    el.setAttribute('d', 'M9 1.5 L11.2 6.3 L16.5 7 L12.7 10.6 L13.6 15.8 L9 13.3 L4.4 15.8 L5.3 10.6 L1.5 7 L6.8 6.3 Z');
+    el.setAttribute('fill', 'currentColor');
+    s.appendChild(el);
+    return s;
+  }
+
+  function renderDecor() {
+    layer.textContent = '';
+    const seq = activeSeq();
+    const blue = new Set(seq);
+    const items = [];
+    for (const id of Object.keys(POSITIONS)) {
+      const p = POSITIONS[id];
+      const isBlue = blue.has(id);
+      // 机关星任何密度都显示；假星在「无」密度下隐藏
+      if (isBlue || cfg.density !== 'none') items.push({ id, x: p.x, y: p.y, blue: isBlue });
+    }
+    if (cfg.density !== 'none') for (const f of FAKE_EXTRA) items.push({ x: f.x, y: f.y, blue: false });
+    if (cfg.density === 'standard') for (const f of FAKE_STANDARD) items.push({ x: f.x, y: f.y, blue: false });
+    // 洗牌后的调色板循环取色，保证假星星颜色分散不扎堆
+    const palette = DEFAULTS.fakeColors.slice();
+    for (let i = palette.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = palette[i]; palette[i] = palette[j]; palette[j] = t;
+    }
+    let fakeIdx = 0;
+    for (const it of items) {
+      const d = document.createElement('div');
+      d.className = 'decor';
+      d.style.left = 'calc(' + it.x + 'vw - 8px)';
+      d.style.top = 'calc(' + it.y + 'vh - 8px)';
+      // 机关星固定蓝色；假星星取其他颜色
+      const color = it.blue ? DEFAULTS.trapColor : palette[fakeIdx++ % palette.length];
+      d.style.color = 'rgba(' + hexRgb(color) + ',' + DEFAULTS.decorAlpha + ')';
+      d.appendChild(starSvg());
+      // 点到非机关星视为顺序错误：静默清空手势进度，无任何反馈
+      d.addEventListener('click', () => onDecorClick(it.id || 'fake'));
+      layer.appendChild(d);
+    }
+  }
+
+  function resetGesture() { step = 0; clicks = 0; lastClick = 0; firstClick = 0; }
+
+  function onDecorClick(id) {
+    if (result.visible || pw.isOpen() || settings.isOpen()) return;
+    const now = performance.now();
+    // 超时（相邻点击 >4s 或总窗口 >20s）：静默清空（步与步之间同样受约束）
+    if ((step > 0 || clicks > 0) && (now - lastClick > DEFAULTS.gestureGap || now - firstClick > DEFAULTS.gestureWindow)) resetGesture();
+    const seq = activeSeq();
+    const expect = seq[step];
+    if (id !== expect) {
+      // 顺序错误：静默清空；若点的恰是第一步机关，则作为新尝试的首击
+      resetGesture();
+      if (id === seq[0]) { clicks = 1; firstClick = now; lastClick = now; }
+      return;
+    }
+    if (step === 0 && clicks === 0) firstClick = now;
+    const need = Math.max(1, cfg.gestureClicks);
+    // 同一步内的连点间隔：多次连点用较短阈值，单击步用步间隔阈值
+    if (clicks > 0 && now - lastClick > (need > 1 ? DEFAULTS.gestureDblGap : DEFAULTS.gestureGap)) clicks = 0;
+    clicks++; lastClick = now;
+    if (clicks >= need) {
+      step++; clicks = 0;
+      if (step >= seq.length) { resetGesture(); pw.open('general'); }
+    }
+  }
+
+  /* ---- 密码框 ---- */
+  const pw = (() => {
+    const mask = document.getElementById('pwMask');
+    const title = document.getElementById('pwTitle');
+    const input = document.getElementById('pwInput');
+    const err = document.getElementById('pwErr');
+    const okBtn = document.getElementById('pwOk');
+    const cancelBtn = document.getElementById('pwCancel');
+    let mode = 'general';           // general | advanced
+    let fails = 0, lockUntil = 0, lockTimer = null;
+    let titleClicks = 0, titleFirst = 0;
+
+    function open(m) {
+      mode = m; fails = 0;
+      input.value = ''; err.textContent = '';
+      input.disabled = false; okBtn.disabled = false;
+      mask.classList.add('show');
+      setTimeout(() => input.focus(), 30);
+    }
+    function close() {
+      mask.classList.remove('show');
+      clearInterval(lockTimer);
+      titleClicks = 0;
+    }
+    function isOpen() { return mask.classList.contains('show'); }
+
+    function currentPw() { return mode === 'general' ? cfg.pwGeneral : cfg.pwAdvanced; }
+
+    function tryLock() {
+      input.disabled = true; okBtn.disabled = true;
+      err.textContent = '请稍后再试';
+      lockUntil = Date.now() + DEFAULTS.pwLockSec * 1000;
+      clearInterval(lockTimer);
+      lockTimer = setInterval(() => {
+        if (Date.now() >= lockUntil) {
+          clearInterval(lockTimer);
+          fails = 0; err.textContent = '';
+          input.disabled = false; okBtn.disabled = false;
+          input.value = ''; input.focus();
+        }
+      }, 250);
+    }
+
+    function confirm() {
+      if (okBtn.disabled) return;
+      if (Date.now() < lockUntil) { err.textContent = '请稍后再试'; return; }
+      if (input.value === currentPw()) {
+        sfx.unlock();
+        close();
+        if (mode === 'general') settings.open();
+        else settings.unlockAdvanced();
+      } else {
+        fails++;
+        sfx.error();
+        input.value = '';
+        if (fails >= DEFAULTS.pwMaxFails) tryLock();
+        else err.textContent = '密码错误';
+      }
+    }
+
+    // 「密码」标题 3 秒内连点 5 次：静默重置当前密码为默认值，无任何反馈
+    title.addEventListener('click', () => {
+      const now = performance.now();
+      if (titleClicks === 0 || now - titleFirst > DEFAULTS.titleResetWindow) { titleClicks = 0; titleFirst = now; }
+      titleClicks++;
+      if (titleClicks >= DEFAULTS.titleResetClicks) {
+        titleClicks = 0;
+        if (mode === 'general') cfg.pwGeneral = DEFAULTS.pwGeneral;
+        else cfg.pwAdvanced = DEFAULTS.pwAdvanced;
+        saveCfg();
+        fails = 0;
+      }
+    });
+
+    okBtn.addEventListener('click', confirm);
+    cancelBtn.addEventListener('click', close);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') confirm(); });
+    mask.addEventListener('click', e => { if (e.target === mask) close(); });
+    return { open, close, isOpen };
+  })();
+
+  renderDecor();
+  return { renderDecor, pw, positions: POSITIONS };
+})();
+
+/* ============================================================
+ * settings：设置面板 UI（通用 / 个性化 / 高级）
+ * ============================================================ */
+let advancedUnlocked = false;
+const settings = (() => {
+  const mask = document.getElementById('settingsMask');
+  const $ = id => document.getElementById(id);
+
+  function open() {
+    syncAll();
+    mask.classList.add('show');
+  }
+  function close() {
+    mask.classList.remove('show');
+    advancedUnlocked = false;
+    $('advancedArea').classList.remove('open');
+    $('advOpenBtn').disabled = false;
+    $('oldGenPw').value = ''; $('newGenPw').value = ''; $('genPwMsg').textContent = '';
+    $('oldAdvPw').value = ''; $('newAdvPw').value = ''; $('advPwMsg').textContent = '';
+  }
+  function isOpen() { return mask.classList.contains('show'); }
+  function unlockAdvanced() {
+    advancedUnlocked = true;
+    $('advancedArea').classList.add('open');
+    $('advOpenBtn').disabled = true;
+    renderProbList();
+  }
+
+  /* ---- 同步控件值 ---- */
+  function syncAll() {
+    $('cfgSpeed').value = cfg.speed;   $('cfgSpeedVal').textContent = cfg.speed.toFixed(1) + '×';
+    $('cfgGlide').value = cfg.glide;   $('cfgGlideVal').textContent = cfg.glide + ' 圈';
+    $('cfgStay').value = cfg.stay;     $('cfgStayVal').textContent = cfg.stay + ' 秒';
+    $('cfgSound').checked = cfg.sound;
+    $('cfgVolume').value = cfg.volume; $('cfgVolumeVal').textContent = cfg.volume + '%';
+    $('cfgVolume').disabled = !cfg.sound;
+    $('cfgDensity').value = cfg.density;
+    $('cfgBgColor').value = cfg.bgColor; $('cfgBgColorVal').textContent = cfg.bgColor.toUpperCase();
+    $('cfgBgOpacity').value = cfg.bgOpacity; $('cfgBgOpacityVal').textContent = cfg.bgOpacity + '%';
+    $('cfgColor').value = cfg.fontColor; $('cfgColorVal').textContent = cfg.fontColor.toUpperCase();
+    $('cfgAutoInk').checked = cfg.autoInk;
+    $('cfgColor').disabled = !!cfg.autoInk;
+    $('cfgFontFamily').value = cfg.fontFamily;
+    $('cfgTitlePx').value = cfg.titlePx; $('cfgTitlePxVal').textContent = cfg.titlePx + ' px';
+    $('cfgTitleWeight').value = cfg.titleWeight; $('cfgTitleWeightVal').textContent = cfg.titleWeight;
+    $('cfgResultScale').value = cfg.resultScale; $('cfgResultScaleVal').textContent = cfg.resultScale.toFixed(2) + '×';
+    $('cfgResultWeight').value = cfg.resultWeight; $('cfgResultWeightVal').textContent = cfg.resultWeight;
+    $('cfgSpherePx').value = cfg.spherePx; $('cfgSpherePxVal').textContent = cfg.spherePx + ' px';
+    $('rosterTextarea').value = cfg.roster.join('\n');
+    $('versionLine').textContent = DEFAULTS.version;
+    $('setVersion').textContent = DEFAULTS.version;
+    $('cfgGestureClicks').value = String(cfg.gestureClicks);
+    $('cfgGestureSteps').value = String(cfg.gestureSteps);
+    normalizeGestureSeq();
+    renderGestureRows();
+    updateRosterUI();
+    applyPersonal();
+  }
+
+  /* ---- 机关手势配置 ---- */
+  function normalizeGestureSeq() {
+    const order = ['tl', 'bl', 'rm', 'tr', 'br', 'lm', 'tm', 'bm'];
+    const src = (cfg.gestureSeq || []).filter(id => secret.positions[id]);
+    const seq = [];
+    for (const id of src) { if (seq.length < 4 && !seq.includes(id)) seq.push(id); }
+    for (const id of order) { if (seq.length >= 4) break; if (!seq.includes(id)) seq.push(id); }
+    cfg.gestureSeq = seq;
+  }
+
+  function renderGestureRows() {
+    const wrap = $('gestureSeqRows');
+    wrap.textContent = '';
+    normalizeGestureSeq();
+    for (let i = 0; i < 4; i++) {
+      const row = document.createElement('div');
+      row.className = 'ctlRow';
+      const lab = document.createElement('label');
+      lab.textContent = '第 ' + (i + 1) + ' 步方位';
+      const sel = document.createElement('select');
+      for (const id of Object.keys(secret.positions)) {
+        const o = document.createElement('option');
+        o.value = id; o.textContent = secret.positions[id].label;
+        sel.appendChild(o);
+      }
+      sel.value = cfg.gestureSeq[i];
+      sel.disabled = i >= cfg.gestureSteps;
+      sel.addEventListener('change', () => {
+        const prev = cfg.gestureSeq[i];
+        // 只与当前启用的步数比较，未启用的后续步骤不参与重复校验
+        const used = cfg.gestureSeq.slice(0, cfg.gestureSteps).filter((v, k) => k !== i);
+        if (used.includes(sel.value)) {
+          sel.value = prev;
+          $('gestureMsg').textContent = '各步方位不能重复';
+          return;
+        }
+        cfg.gestureSeq[i] = sel.value;
+        normalizeGestureSeq();
+        $('gestureMsg').textContent = '手势已更新，蓝色星星已同步';
+        saveCfg(); renderGestureRows(); secret.renderDecor();
+      });
+      row.appendChild(lab); row.appendChild(sel);
+      wrap.appendChild(row);
+    }
+  }
+
+  /* ---- 个性化即时生效 ---- */
+  function applyPersonal() {
+    const ink = effectiveInk();
+    document.documentElement.style.setProperty('--ink', ink);
+    document.documentElement.style.setProperty('--font-main', fontStack());
+    document.documentElement.style.setProperty('--title-weight', String(cfg.titleWeight));
+    document.documentElement.style.setProperty('--result-weight', String(cfg.resultWeight));
+    document.getElementById('appTitle').style.fontSize = cfg.titlePx + 'px';
+    const fp = document.getElementById('fontPreview');
+    fp.style.fontFamily = fontStack();
+    fp.style.fontWeight = String(cfg.titleWeight);
+    fp.style.color = ink;
+    fp.style.background = cfg.bgColor;
+    applyBg();
+    secret.renderDecor();
+  }
+
+  /* ---- 通用滑杆 ---- */
+  $('cfgSpeed').addEventListener('input', e => {
+    cfg.speed = parseFloat(e.target.value);
+    $('cfgSpeedVal').textContent = cfg.speed.toFixed(1) + '×'; saveCfg();
+  });
+  $('cfgGlide').addEventListener('input', e => {
+    cfg.glide = parseFloat(e.target.value);
+    $('cfgGlideVal').textContent = cfg.glide + ' 圈'; saveCfg();
+  });
+  $('cfgStay').addEventListener('input', e => {
+    cfg.stay = parseInt(e.target.value, 10);
+    $('cfgStayVal').textContent = cfg.stay + ' 秒'; saveCfg();
+  });
+  /* ---- 音效 ---- */
+  $('cfgSound').addEventListener('change', e => {
+    cfg.sound = e.target.checked;
+    $('cfgVolume').disabled = !cfg.sound;
+    $('soundMsg').textContent = cfg.sound ? '音效已开启' : '音效已关闭';
+    saveCfg();
+    if (cfg.sound) sfx.unlock(); // 顺便解锁音频上下文并给出试听音
+  });
+  $('cfgVolume').addEventListener('input', e => {
+    cfg.volume = parseInt(e.target.value, 10);
+    $('cfgVolumeVal').textContent = cfg.volume + '%';
+    saveCfg();
+  });
+  $('cfgVolume').addEventListener('change', () => sfx.win());
+
+  /* ---- 名单管理 ---- */
+  $('rosterApply').addEventListener('click', () => setRoster(parseRoster($('rosterTextarea').value)));
+  $('rosterClear').addEventListener('click', () => { $('rosterTextarea').value = ''; setRoster([]); });
+  $('rosterFileBtn').addEventListener('click', () => $('rosterFile').click());
+  $('rosterFile').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const isCsv = /\.csv$/i.test(f.name);
+      const list = isCsv ? parseCsv(String(reader.result || '')) : parseRoster(String(reader.result || ''));
+      $('rosterTextarea').value = list.join('\n');
+      setRoster(list);
+    };
+    reader.readAsText(f, 'utf-8');
+    e.target.value = '';
+  });
+
+  /* ---- 修改通用密码 ---- */
+  $('genPwSave').addEventListener('click', () => {
+    const o = $('oldGenPw').value, n = $('newGenPw').value;
+    if (o !== cfg.pwGeneral) { $('genPwMsg').textContent = '旧密码不正确'; return; }
+    if (!n.trim()) { $('genPwMsg').textContent = '新密码不能为空'; return; }
+    cfg.pwGeneral = n; saveCfg();
+    $('oldGenPw').value = ''; $('newGenPw').value = '';
+    $('genPwMsg').textContent = '通用密码已更新';
+  });
+
+  /* ---- 高级入口与高级密码 ---- */
+  $('advOpenBtn').addEventListener('click', () => secret.pw.open('advanced'));
+  $('advPwSave').addEventListener('click', () => {
+    const o = $('oldAdvPw').value, n = $('newAdvPw').value;
+    if (o !== cfg.pwAdvanced) { $('advPwMsg').textContent = '旧高级密码不正确'; return; }
+    if (!n.trim()) { $('advPwMsg').textContent = '新密码不能为空'; return; }
+    cfg.pwAdvanced = n; saveCfg();
+    $('oldAdvPw').value = ''; $('newAdvPw').value = '';
+    $('advPwMsg').textContent = '高级密码已更新（与通用密码独立）';
+  });
+
+  /* ---- 个性化 ---- */
+  $('cfgDensity').addEventListener('change', e => { cfg.density = e.target.value; saveCfg(); applyPersonal(); });
+  /* ---- 背景颜色 / 图片 ---- */
+  $('cfgBgColor').addEventListener('input', e => {
+    cfg.bgColor = e.target.value;
+    $('cfgBgColorVal').textContent = cfg.bgColor.toUpperCase();
+    saveCfg(); applyPersonal();
+  });
+  $('cfgBgOpacity').addEventListener('input', e => {
+    cfg.bgOpacity = parseInt(e.target.value, 10);
+    $('cfgBgOpacityVal').textContent = cfg.bgOpacity + '%';
+    saveCfg(); applyPersonal();
+  });
+  $('bgUploadBtn').addEventListener('click', () => $('bgFile').click());
+  $('bgClearBtn').addEventListener('click', () => {
+    bgImage = null;
+    try { localStorage.removeItem(BG_KEY); } catch (e) { /* 忽略 */ }
+    $('bgMsg').textContent = '背景图片已清除';
+    computeBgLum(null, null);
+    applyPersonal();
+  });
+  $('bgFile').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (!/^image\//.test(f.type)) { $('bgMsg').textContent = '请选择图片文件'; e.target.value = ''; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        // 压缩：长边 ≤1600，JPEG 0.72，控制 localStorage 体积
+        const maxSide = 1600;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const cw = Math.max(1, Math.round(img.width * scale));
+        const ch = Math.max(1, Math.round(img.height * scale));
+        const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+        cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        const data = cv.toDataURL('image/jpeg', 0.72);
+        try { localStorage.setItem(BG_KEY, data); }
+        catch (err) { $('bgMsg').textContent = '图片过大，请换一张更小的图片'; return; }
+        bgImage = data;
+        $('bgMsg').textContent = '背景图片已导入（长边压缩到 1600px 内）';
+        computeBgLum(bgImage, applyBg);   // 重新计算图片亮度以适配字体反色
+        applyPersonal();
+      };
+      img.onerror = () => { $('bgMsg').textContent = '图片解析失败，请换一张'; };
+      img.src = String(reader.result);
+    };
+    reader.readAsDataURL(f);
+    e.target.value = '';
+  });
+  $('cfgGestureClicks').addEventListener('change', e => {
+    cfg.gestureClicks = parseInt(e.target.value, 10);
+    saveCfg();
+  });
+  $('cfgGestureSteps').addEventListener('change', e => {
+    cfg.gestureSteps = parseInt(e.target.value, 10);
+    normalizeGestureSeq();
+    saveCfg(); renderGestureRows(); secret.renderDecor();
+  });
+  $('cfgColor').addEventListener('input', e => {
+    cfg.fontColor = e.target.value;
+    $('cfgColorVal').textContent = cfg.fontColor.toUpperCase();
+    saveCfg(); applyPersonal();
+  });
+  $('cfgAutoInk').addEventListener('change', e => {
+    cfg.autoInk = e.target.checked;
+    $('cfgColor').disabled = !!cfg.autoInk;
+    saveCfg(); applyPersonal();
+  });
+  $('cfgTitlePx').addEventListener('input', e => {
+    cfg.titlePx = parseInt(e.target.value, 10);
+    $('cfgTitlePxVal').textContent = cfg.titlePx + ' px'; saveCfg(); applyPersonal();
+  });
+  $('cfgFontFamily').addEventListener('change', e => {
+    cfg.fontFamily = e.target.value;
+    saveCfg(); applyPersonal();
+  });
+  $('cfgTitleWeight').addEventListener('input', e => {
+    cfg.titleWeight = parseInt(e.target.value, 10);
+    $('cfgTitleWeightVal').textContent = cfg.titleWeight; saveCfg(); applyPersonal();
+  });
+  $('cfgResultWeight').addEventListener('input', e => {
+    cfg.resultWeight = parseInt(e.target.value, 10);
+    $('cfgResultWeightVal').textContent = cfg.resultWeight; saveCfg(); applyPersonal();
+  });
+  $('cfgResultScale').addEventListener('input', e => {
+    cfg.resultScale = parseFloat(e.target.value);
+    $('cfgResultScaleVal').textContent = cfg.resultScale.toFixed(2) + '×'; saveCfg();
+  });
+  $('cfgSpherePx').addEventListener('input', e => {
+    cfg.spherePx = parseInt(e.target.value, 10);
+    $('cfgSpherePxVal').textContent = cfg.spherePx + ' px'; saveCfg();
+  });
+  $('personalReset').addEventListener('click', () => {
+    cfg.density = DEFAULTS.density;
+    cfg.bgColor = DEFAULTS.bgColor; cfg.bgOpacity = DEFAULTS.bgOpacity;
+    cfg.fontColor = DEFAULTS.fontColor; cfg.autoInk = DEFAULTS.autoInk; cfg.titlePx = DEFAULTS.titlePx;
+    cfg.fontFamily = DEFAULTS.fontFamily; cfg.titleWeight = DEFAULTS.titleWeight;
+    cfg.resultScale = DEFAULTS.resultScale; cfg.resultWeight = DEFAULTS.resultWeight;
+    cfg.spherePx = DEFAULTS.spherePx;
+    bgImage = null;
+    try { localStorage.removeItem(BG_KEY); } catch (e) { /* 忽略 */ }
+    saveCfg(); syncAll();
+  });
+
+  /* ---- Tab 切换 / 关闭 ---- */
+  mask.querySelectorAll('.tabBtn').forEach(b => b.addEventListener('click', () => {
+    mask.querySelectorAll('.tabBtn').forEach(x => x.classList.toggle('active', x === b));
+    mask.querySelectorAll('.tabPage').forEach(p => p.classList.toggle('active', p.id === 'tab-' + b.dataset.tab));
+  }));
+  $('settingsClose').addEventListener('click', close);
+
+  return { open, close, isOpen, unlockAdvanced, syncAll };
+})();
+
+/* ---- 概率管理 UI（高级设置内） ---- */
+function tierSelect(value) {
+  const sel = document.createElement('select');
+  for (const t of TIER_NAMES) {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t;
+    if (t === value) o.selected = true;
+    sel.appendChild(o);
+  }
+  return sel;
+}
+function renderProbList() {
+  const listEl = document.getElementById('probList');
+  listEl.textContent = '';
+  const names = cfg.roster.slice();
+  const seen = new Set(names);
+  const extraNames = [];
+  for (const e of cfg.extras) if (!seen.has(e.name)) { seen.add(e.name); extraNames.push(e.name); }
+  const all = names.concat(extraNames);
+  let total = 0;
+  const weights = all.map(n => { const w = picker.weightOf(n); total += w; return w; });
+  // 最大余数法：把 10000 个 0.01% 按权重分配，保证展示值合计恰为 100.00%
+  let hundredths = [];
+  if (all.length && total > 0) {
+    const raw = weights.map(w => w / total * 10000);
+    hundredths = raw.map(Math.floor);
+    let rest = 10000 - hundredths.reduce((a, b) => a + b, 0);
+    const order = raw.map((v, i) => [v - Math.floor(v), i]).sort((a, b) => b[0] - a[0]);
+    for (let k = 0; k < rest; k++) hundredths[order[k % order.length][1]]++;
+  }
+  if (!all.length) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:14px 4px;font-size:12px;color:rgba(255,255,255,.4)';
+    empty.textContent = '暂无名单，请先在「名单管理」中导入';
+    listEl.appendChild(empty);
+  }
+  let sum = 0;
+  for (let idx = 0; idx < all.length; idx++) {
+    const n = all[idx];
+    const isExtra = extraNames.includes(n);
+    const row = document.createElement('div');
+    row.className = 'probRow';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'pName';
+    nameSpan.textContent = isExtra ? n + '（名单外）' : n;
+    const sel = tierSelect(cfg.probs[n] || '未设置');
+    sel.addEventListener('change', () => {
+      if (sel.value === '未设置') delete cfg.probs[n];
+      else cfg.probs[n] = sel.value;
+      const ex = cfg.extras.find(x => x.name === n);
+      if (ex) ex.tier = sel.value;
+      saveCfg(); renderProbList();      // 概率改动立即生效并刷新百分比
+    });
+    const pct = document.createElement('span');
+    pct.className = 'pPct';
+    pct.textContent = (hundredths[idx] / 100).toFixed(2) + '%';
+    sum += hundredths[idx];
+    const del = document.createElement('button');
+    del.className = 'pDel'; del.type = 'button'; del.textContent = '×';
+    del.title = isExtra ? '移除该名单外项' : '清除该项档位';
+    del.addEventListener('click', () => {
+      if (isExtra) {
+        cfg.extras = cfg.extras.filter(x => x.name !== n);
+        delete cfg.probs[n];
+      } else delete cfg.probs[n];
+      saveCfg(); renderProbList();
+    });
+    row.appendChild(nameSpan); row.appendChild(sel); row.appendChild(pct); row.appendChild(del);
+    listEl.appendChild(row);
+  }
+  document.getElementById('probTotal').textContent = all.length ? (sum / 100).toFixed(2) + '%' : '—';
+}
+(function initProbExtras() {
+  const sel = document.getElementById('extraTierSelect');
+  for (const t of TIER_NAMES.filter(t => t !== '未设置')) {
+    const o = document.createElement('option');
+    o.value = t; o.textContent = t;
+    if (t === '默认') o.selected = true;
+    sel.appendChild(o);
+  }
+  document.getElementById('extraAddBtn').addEventListener('click', () => {
+    const input = document.getElementById('extraNameInput');
+    const name = input.value.trim();
+    if (!name) return;
+    const tier = document.getElementById('extraTierSelect').value;
+    if (cfg.roster.includes(name)) {
+      cfg.probs[name] = tier;           // 已在名单内：直接设档位
+    } else if (!cfg.extras.some(x => x.name === name)) {
+      cfg.extras.push({ name, tier });
+      cfg.probs[name] = tier;
+    } else {
+      cfg.extras.find(x => x.name === name).tier = tier;
+      cfg.probs[name] = tier;
+    }
+    input.value = '';
+    saveCfg(); renderProbList();
+  });
+  document.getElementById('probClearBtn').addEventListener('click', () => {
+    cfg.probs = {};
+    for (const e of cfg.extras) e.tier = '未设置';
+    saveCfg(); renderProbList();
+  });
+})();
+
+/* ============================================================
+ * 主按钮与全局键盘
+ * ============================================================ */
+const mainBtn = document.getElementById('mainBtn');
+function syncMainBtn() {
+  const s = sphere.state;
+  mainBtn.textContent = s === 'spinning' ? '暂停' : (s === 'decelerating' ? '减速中' : '开始');
+  mainBtn.disabled = (s === 'decelerating' || s === 'result');
+}
+mainBtn.addEventListener('click', () => {
+  const now = performance.now();
+  if (sphere.state === 'idle') {
+    sfx.whoosh();           // 首次点击同时解锁音频上下文（浏览器要求用户手势）
+    if (sphere.start()) syncMainBtn();
+  } else if (sphere.state === 'spinning') {
+    sphere.pause(now);
+    syncMainBtn();
+    if (sphere.state === 'result') mainBtn.disabled = true;
+  }
+});
+document.addEventListener('keydown', e => {
+  if (result.visible && (e.key === 'Escape' || e.key === ' ' || e.code === 'Space')) {
+    e.preventDefault(); result.hide(); return;
+  }
+  if (e.key === 'Escape') {
+    if (secret.pw.isOpen()) secret.pw.close();
+    else if (settings.isOpen()) settings.close();
+  }
+});
+
+/* ============================================================
+ * 启动
+ * ============================================================ */
+loadCfg();
+if (!cfg.roster.length && !localStorage.getItem(DEFAULTS.storageKey)) {
+  cfg.roster = defaultRoster();       // 首次运行载入 120 人示例名单
+  saveCfg();
+}
+try { bgImage = localStorage.getItem(BG_KEY) || null; } catch (e) { bgImage = null; }
+computeBgLum(bgImage, () => { document.documentElement.style.setProperty('--ink', effectiveInk()); });
+sphere.rebuild();
+updateRosterUI();
+document.documentElement.style.setProperty('--ink', effectiveInk());
+document.documentElement.style.setProperty('--font-main', fontStack());
+document.documentElement.style.setProperty('--title-weight', String(cfg.titleWeight));
+document.documentElement.style.setProperty('--result-weight', String(cfg.resultWeight));
+document.getElementById('appTitle').style.fontSize = cfg.titlePx + 'px';
+applyBg();
+secret.renderDecor();
+syncMainBtn();
+</script>
+</body>
+</html>
