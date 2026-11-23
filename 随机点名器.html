@@ -78,6 +78,24 @@ input,textarea{-webkit-user-select:text;user-select:text}
 }
 .psBtn:disabled{opacity:.3;cursor:default}
 
+#profileList{flex:1;min-width:200px;display:flex;flex-direction:column;gap:6px}
+.profRow{
+  display:flex;align-items:center;gap:10px;padding:6px 10px;
+  border:1px solid rgba(255,255,255,.1);transition:border-color .15s;
+}
+.profRow:hover{border-color:rgba(255,255,255,.22)}
+.profRow .pn{font-size:12.5px;color:rgba(255,255,255,.88);letter-spacing:.04em}
+.profRow .tag{
+  font-size:10px;letter-spacing:.12em;color:#fff;border:1px solid rgba(255,255,255,.5);
+  padding:1px 7px;border-radius:999px;
+}
+.profRow .pm{margin-left:auto;font-size:11px;color:rgba(255,255,255,.38);font-variant-numeric:tabular-nums}
+.profRow .pd{
+  background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;font-size:13px;line-height:1;padding:2px 4px;
+}
+.profRow .pd:hover{color:#fff}
+.profRow .pd:disabled{opacity:.25;cursor:default}
+
 /* ===== 四周星星装饰（真机关蓝色，假星星随机彩色，形状一致） ===== */
 #decorLayer{position:fixed;inset:0;pointer-events:none;z-index:5}
 .decor{
@@ -303,7 +321,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <div class="setHeader">
       <div style="display:flex;align-items:baseline">
         <h2>设置</h2>
-        <span class="sub" id="setVersion">v1.7.1</span>
+        <span class="sub" id="setVersion">v1.7.2</span>
       </div>
       <button id="settingsClose" type="button" aria-label="关闭">×</button>
     </div>
@@ -330,6 +348,10 @@ input,textarea{-webkit-user-select:text;user-select:text}
           <label>新建 / 复制</label>
           <button class="thinBtn" id="profileNewBtn" type="button">新建（空名单）</button>
           <button class="thinBtn" id="profileCopyBtn" type="button">复制当前配置</button>
+        </div>
+        <div class="ctlRow" style="align-items:flex-start">
+          <label style="padding-top:8px">配置列表</label>
+          <div id="profileList"></div>
         </div>
         <div class="ctlRow">
           <label>删除 / 恢复</label>
@@ -463,7 +485,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 
       <div class="secBlock">
         <h3>版本</h3>
-        <div class="versionLine" id="versionLine">v1.7.1</div>
+        <div class="versionLine" id="versionLine">v1.7.2</div>
         <ul class="featList">
           <li>3D 人名球（Fibonacci 球面均匀分布，120 人 60fps）</li>
           <li>无规则高速转动 + 可调圈数滑行减速</li>
@@ -485,6 +507,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
           <li>v1.6.1：转动改为低频气声，取消密集滴答；只在减速末段保留轻柔落点声</li>
           <li>v1.6.2：撤掉转动气声与低鸣，改为开始一声气口 + 减速末段落点声</li>
           <li>v1.6.3：转动改为放大的「嘀嗒」倒计时（高低交替），减速逐渐变慢，出结果加一声低频冲击</li>
+          <li>v1.7.2：配置块增加配置列表，可逐个删除任意一套配置（当前项带标记）</li>
           <li>v1.7.0：新增多套配置（每套独立名单与概率），主页右上角可见胶囊开关一键切换；概率档位新增「永远抽不到」，可一键恢复原版 120 人名单</li>
         </ul>
       </div>
@@ -586,7 +609,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
  * 所有可调数值集中在 DEFAULTS，避免魔法数字散落
  * ============================================================ */
 const DEFAULTS = {
-  version: 'v1.7.1',
+  version: 'v1.7.2',
   storageKey: 'rollcall.config.v1',
   speed: 1,               // 转动速度倍率 0.5–3
   glide: 2,               // 停止滑动圈数 0–10，步长 0.5
@@ -1497,6 +1520,39 @@ const profiles = (() => {
       boxFor = cfg.activeId;
     }
     renderSwitch();
+    renderList();
+  }
+
+  // 设置页「配置列表」：每个配置一行，可单独删除
+  function renderList() {
+    const wrap = document.getElementById('profileList');
+    if (!wrap) return;
+    const canDel = cfg.profiles.length > 1;
+    wrap.textContent = '';
+    cfg.profiles.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'profRow';
+      const nm = document.createElement('span');
+      nm.className = 'pn'; nm.textContent = p.name;
+      row.appendChild(nm);
+      if (p.id === cfg.activeId) {
+        const tag = document.createElement('span');
+        tag.className = 'tag'; tag.textContent = '当前';
+        row.appendChild(tag);
+      }
+      const md = document.createElement('span');
+      md.className = 'pm';
+      const hc = profileHiddenCount(p);
+      md.textContent = p.roster.length + ' 人' + (hc ? ' · 概率 ' + hc + ' 人' : '');
+      row.appendChild(md);
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'pd'; del.textContent = '×';
+      del.title = canDel ? ('删除配置「' + p.name + '」') : '至少保留一个配置';
+      del.disabled = !canDel;
+      del.addEventListener('click', () => removeOne(p.id));
+      row.appendChild(del);
+      wrap.appendChild(row);
+    });
   }
 
   function uniqueName(base) {
@@ -1523,16 +1579,22 @@ const profiles = (() => {
     return p;
   }
 
-  function remove() {
-    const p = activeProfile();
+  // 删除指定配置（列表里的 × 与「删除当前配置」按钮共用）
+  function removeOne(id) {
     if (cfg.profiles.length <= 1) { msg('至少保留一个配置'); return; }
-    cfg.profiles = cfg.profiles.filter(x => x.id !== p.id);
-    cfg.activeId = cfg.profiles[0].id;
+    const p = cfg.profiles.find(x => x.id === id);
+    if (!p) return;
+    const wasActive = (cfg.activeId === id);
+    cfg.profiles = cfg.profiles.filter(x => x.id !== id);
+    if (wasActive || !cfg.profiles.some(x => x.id === cfg.activeId)) cfg.activeId = cfg.profiles[0].id;
     applyActiveToLive();
     saveCfg(); sphere.rebuild(); updateRosterUI(); syncUI();
     if (advancedUnlocked) renderProbList();
-    msg('已删除配置「' + p.name + '」，已切到「' + activeProfile().name + '」');
+    sfx.click();
+    msg('已删除配置「' + p.name + '」' + (wasActive ? '，已切到「' + activeProfile().name + '」' : ''));
   }
+
+  function remove() { removeOne(cfg.activeId); }
 
   function rename(name) {
     name = String(name || '').trim().slice(0, 16);
@@ -1563,7 +1625,7 @@ const profiles = (() => {
     msg('已恢复原版：' + p.roster.length + ' 人，概率全部重置为默认');
   }
 
-  return { renderSwitch, syncUI, switchTo, create, remove, rename, restoreOriginal, canSwitch };
+  return { renderSwitch, syncUI, renderList, switchTo, create, remove, removeOne, rename, restoreOriginal, canSwitch };
 })();
 
 /* ============================================================
