@@ -303,7 +303,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <div class="setHeader">
       <div style="display:flex;align-items:baseline">
         <h2>设置</h2>
-        <span class="sub" id="setVersion">v1.7.0</span>
+        <span class="sub" id="setVersion">v1.7.1</span>
       </div>
       <button id="settingsClose" type="button" aria-label="关闭">×</button>
     </div>
@@ -315,7 +315,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <!-- 通用 -->
     <div class="tabPage active" id="tab-general">
       <div class="secBlock">
-        <h3>配置（名单 + 隐藏概率）</h3>
+        <h3>配置（名单与概率）</h3>
         <div class="ctlRow">
           <label>当前配置</label>
           <select id="cfgProfileSelect"></select>
@@ -323,7 +323,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
         </div>
         <div class="ctlRow">
           <label>重命名</label>
-          <input type="text" id="profileRenameInput" placeholder="新名称，如：原版 / 内定 A" maxlength="16">
+          <input type="text" id="profileRenameInput" placeholder="新名称，如：原版 / 一班" maxlength="16">
           <button class="thinBtn" id="profileRenameBtn" type="button">重命名</button>
         </div>
         <div class="ctlRow">
@@ -334,7 +334,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
         <div class="ctlRow">
           <label>删除 / 恢复</label>
           <button class="thinBtn" id="profileDelBtn" type="button">删除当前配置</button>
-          <button class="thinBtn" id="profileResetBtn" type="button">恢复原版（120 人等概率）</button>
+          <button class="thinBtn" id="profileResetBtn" type="button">恢复原版（120 人）</button>
         </div>
         <div class="msgLine" id="profileMsg"></div>
         <div class="ctlNote" style="margin:8px 0 0 0">每个配置独立保存自己的名单与概率；主页右上角的胶囊按钮可直接切换当前配置，切换后球体与抽取立即使用新配置</div>
@@ -463,7 +463,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 
       <div class="secBlock">
         <h3>版本</h3>
-        <div class="versionLine" id="versionLine">v1.7.0</div>
+        <div class="versionLine" id="versionLine">v1.7.1</div>
         <ul class="featList">
           <li>3D 人名球（Fibonacci 球面均匀分布，120 人 60fps）</li>
           <li>无规则高速转动 + 可调圈数滑行减速</li>
@@ -485,7 +485,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
           <li>v1.6.1：转动改为低频气声，取消密集滴答；只在减速末段保留轻柔落点声</li>
           <li>v1.6.2：撤掉转动气声与低鸣，改为开始一声气口 + 减速末段落点声</li>
           <li>v1.6.3：转动改为放大的「嘀嗒」倒计时（高低交替），减速逐渐变慢，出结果加一声低频冲击</li>
-          <li>v1.7.0：新增多套配置（每套独立名单与隐藏概率），主页右上角可见胶囊开关一键切换；概率档位新增「永远抽不到」，可一键恢复原版 120 人等概率</li>
+          <li>v1.7.0：新增多套配置（每套独立名单与概率），主页右上角可见胶囊开关一键切换；概率档位新增「永远抽不到」，可一键恢复原版 120 人名单</li>
         </ul>
       </div>
     </div>
@@ -586,7 +586,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
  * 所有可调数值集中在 DEFAULTS，避免魔法数字散落
  * ============================================================ */
 const DEFAULTS = {
-  version: 'v1.7.0',
+  version: 'v1.7.1',
   storageKey: 'rollcall.config.v1',
   speed: 1,               // 转动速度倍率 0.5–3
   glide: 2,               // 停止滑动圈数 0–10，步长 0.5
@@ -1434,7 +1434,7 @@ const secret = (() => {
 })();
 
 /* ============================================================
- * profiles：多套配置（各自独立的名单与隐藏概率）+ 主页切换开关
+ * profiles：多套配置（各自独立的名单与概率）+ 主页切换开关
  * ============================================================ */
 const profiles = (() => {
   const bar = document.getElementById('profileSwitch');
@@ -1560,7 +1560,7 @@ const profiles = (() => {
     applyActiveToLive();
     saveCfg(); sphere.rebuild(); updateRosterUI(); syncUI(); refreshRosterBox();
     if (advancedUnlocked) renderProbList();
-    msg('已恢复原版：' + p.roster.length + ' 人，全部等概率');
+    msg('已恢复原版：' + p.roster.length + ' 人，概率全部重置为默认');
   }
 
   return { renderSwitch, syncUI, switchTo, create, remove, rename, restoreOriginal, canSwitch };
@@ -1717,7 +1717,7 @@ const settings = (() => {
   });
   $('cfgVolume').addEventListener('change', () => sfx.win());
 
-  /* ---- 配置（名单 + 隐藏概率） ---- */
+  /* ---- 配置（名单与概率） ---- */
   $('cfgProfileSelect').addEventListener('change', e => profiles.switchTo(e.target.value));
   $('profileNewBtn').addEventListener('click', () => {
     const p = profiles.create('配置 ' + (cfg.profiles.length + 1), null);
