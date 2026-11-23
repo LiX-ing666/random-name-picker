@@ -2,7 +2,7 @@
 
 课堂、会议、直播抽人用的「人名球」点名工具。一个 HTML 文件，双击即可用，不联网、不装依赖、不上传任何数据。
 
-- 在线演示（豆包发布版）：https://4m971vpmr3c1r.doubao.link/app/app_17j81wh6x8e
+- 在线演示：https://4m971vpmr3c1r.doubao.link/app/app_17j81wh6x8e
 - 源码：`随机点名器.html`（单文件，约 82 KB，内联 CSS / JS，零外部请求）
 
 ---
