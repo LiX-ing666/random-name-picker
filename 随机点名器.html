@@ -56,6 +56,28 @@ input,textarea{-webkit-user-select:text;user-select:text}
   font-size:12px;color:var(--ink);opacity:.4;letter-spacing:.1em;display:none;
 }
 
+/* ===== 主页配置切换（明显可见的常规功能，不参与隐藏机关） ===== */
+#profileSwitch{
+  position:fixed;top:4vh;right:70px;z-index:6;
+  display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap;
+  max-width:44vw;
+}
+#profileSwitch .psLabel{font-size:10px;letter-spacing:.2em;color:var(--ink);opacity:.26}
+.psBtn{
+  background:transparent;border:1px solid color-mix(in srgb,var(--ink) 24%,transparent);
+  color:var(--ink);opacity:.5;
+  font-size:11px;letter-spacing:.1em;padding:5px 13px;border-radius:999px;cursor:pointer;
+  white-space:nowrap;line-height:1.5;
+  transition:opacity .18s,border-color .18s,background .18s;
+}
+.psBtn:hover{opacity:.85}
+.psBtn.active{
+  opacity:1;border-color:var(--ink);
+  background:color-mix(in srgb,var(--ink) 12%,transparent);
+  font-weight:600;
+}
+.psBtn:disabled{opacity:.3;cursor:default}
+
 /* ===== 四周星星装饰（真机关蓝色，假星星随机彩色，形状一致） ===== */
 #decorLayer{position:fixed;inset:0;pointer-events:none;z-index:5}
 .decor{
@@ -248,6 +270,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
 <div id="bgLayer"></div>
 <canvas id="sphereCanvas"></canvas>
 <h1 id="appTitle">随机点名器</h1>
+<div id="profileSwitch" aria-label="配置切换"></div>
 <button id="mainBtn" type="button">开始</button>
 <div id="emptyHint">名单为空，请通过隐藏入口进入设置导入名单</div>
 
@@ -280,7 +303,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
     <div class="setHeader">
       <div style="display:flex;align-items:baseline">
         <h2>设置</h2>
-        <span class="sub" id="setVersion">v1.6.3</span>
+        <span class="sub" id="setVersion">v1.7.0</span>
       </div>
       <button id="settingsClose" type="button" aria-label="关闭">×</button>
     </div>
@@ -291,6 +314,32 @@ input,textarea{-webkit-user-select:text;user-select:text}
 
     <!-- 通用 -->
     <div class="tabPage active" id="tab-general">
+      <div class="secBlock">
+        <h3>配置（名单 + 隐藏概率）</h3>
+        <div class="ctlRow">
+          <label>当前配置</label>
+          <select id="cfgProfileSelect"></select>
+          <span class="ctlVal" id="profileMeta" style="flex:0 0 auto;text-align:left;color:rgba(255,255,255,.42);font-size:11px"></span>
+        </div>
+        <div class="ctlRow">
+          <label>重命名</label>
+          <input type="text" id="profileRenameInput" placeholder="新名称，如：原版 / 内定 A" maxlength="16">
+          <button class="thinBtn" id="profileRenameBtn" type="button">重命名</button>
+        </div>
+        <div class="ctlRow">
+          <label>新建 / 复制</label>
+          <button class="thinBtn" id="profileNewBtn" type="button">新建（空名单）</button>
+          <button class="thinBtn" id="profileCopyBtn" type="button">复制当前配置</button>
+        </div>
+        <div class="ctlRow">
+          <label>删除 / 恢复</label>
+          <button class="thinBtn" id="profileDelBtn" type="button">删除当前配置</button>
+          <button class="thinBtn" id="profileResetBtn" type="button">恢复原版（120 人等概率）</button>
+        </div>
+        <div class="msgLine" id="profileMsg"></div>
+        <div class="ctlNote" style="margin:8px 0 0 0">每个配置独立保存自己的名单与概率；主页右上角的胶囊按钮可直接切换当前配置，切换后球体与抽取立即使用新配置</div>
+      </div>
+
       <div class="secBlock">
         <h3>抽取</h3>
         <div class="ctlRow">
@@ -414,11 +463,11 @@ input,textarea{-webkit-user-select:text;user-select:text}
 
       <div class="secBlock">
         <h3>版本</h3>
-        <div class="versionLine" id="versionLine">v1.6.3</div>
+        <div class="versionLine" id="versionLine">v1.7.0</div>
         <ul class="featList">
           <li>3D 人名球（Fibonacci 球面均匀分布，120 人 60fps）</li>
           <li>无规则高速转动 + 可调圈数滑行减速</li>
-          <li>加权概率抽取（极高 / 高 / 默认 / 低 / 极低）</li>
+          <li>加权概率抽取（极高 / 高 / 默认 / 低 / 极低 / 永远抽不到）</li>
           <li>全屏大字结果页，自动返回，Esc / 空格兜底</li>
           <li>彩色星星隐藏机关（真机关蓝色，假星星随机色）+ 双独立密码</li>
           <li>名单粘贴 / 文件导入，配置 localStorage 持久化</li>
@@ -436,6 +485,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
           <li>v1.6.1：转动改为低频气声，取消密集滴答；只在减速末段保留轻柔落点声</li>
           <li>v1.6.2：撤掉转动气声与低鸣，改为开始一声气口 + 减速末段落点声</li>
           <li>v1.6.3：转动改为放大的「嘀嗒」倒计时（高低交替），减速逐渐变慢，出结果加一声低频冲击</li>
+          <li>v1.7.0：新增多套配置（每套独立名单与隐藏概率），主页右上角可见胶囊开关一键切换；概率档位新增「永远抽不到」，可一键恢复原版 120 人等概率</li>
         </ul>
       </div>
     </div>
@@ -536,7 +586,7 @@ input,textarea{-webkit-user-select:text;user-select:text}
  * 所有可调数值集中在 DEFAULTS，避免魔法数字散落
  * ============================================================ */
 const DEFAULTS = {
-  version: 'v1.6.3',
+  version: 'v1.7.0',
   storageKey: 'rollcall.config.v1',
   speed: 1,               // 转动速度倍率 0.5–3
   glide: 2,               // 停止滑动圈数 0–10，步长 0.5
@@ -577,9 +627,9 @@ const DEFAULTS = {
   tickGapMax: 380,        // 倒计时嘀嗒最长间隔 ms
   trapColor: '#4DA6FF',   // 真机关星星固定蓝色
   fakeColors: ['#FF6B6B', '#FFD93D', '#6BCB77', '#B983FF', '#FF9F45', '#F473B9', '#E8E8E8', '#9E9E9E'], // 假星星随机取色（不含蓝）
-  tiers: { '极高': 8, '高': 4, '默认': 1, '低': 0.5, '极低': 0.1, '未设置': 1 }
+  tiers: { '极高': 8, '高': 4, '默认': 1, '低': 0.5, '极低': 0.1, '永远抽不到': 0, '未设置': 1 }
 };
-const TIER_NAMES = ['极高', '高', '默认', '低', '极低', '未设置'];
+const TIER_NAMES = ['极高', '高', '默认', '低', '极低', '永远抽不到', '未设置'];
 // 字体族：全部使用系统内置字体，离线可用
 const FONTS = {
   sans: '"PingFang SC","Microsoft YaHei","Source Han Sans SC","Noto Sans CJK SC",sans-serif',
@@ -643,28 +693,101 @@ const cfg = {
   fontColor: DEFAULTS.fontColor, autoInk: DEFAULTS.autoInk, titlePx: DEFAULTS.titlePx,
   fontFamily: DEFAULTS.fontFamily, titleWeight: DEFAULTS.titleWeight,
   resultScale: DEFAULTS.resultScale, resultWeight: DEFAULTS.resultWeight, spherePx: DEFAULTS.spherePx,
-  roster: [], probs: {}, extras: []   // extras: [{name,tier}] 名单外概率项
+  // 多套配置：profiles 各自独立保存名单 / 概率 / 名单外概率项，activeId 指向当前使用的一套
+  profiles: [], activeId: '',
+  roster: [], probs: {}, extras: []   // 当前配置的实时数据（内存视图）；extras: [{name,tier}]
 };
 cfg.gestureClicks = DEFAULTS.gestureClicks;
 cfg.gestureSteps = DEFAULTS.gestureSteps;
 cfg.gestureSeq = DEFAULTS.gestureSeq.slice();
 
+/* ---- 配置档案：当前配置与实时数据双向同步 ---- */
+let profileSeq = 1;
+function newProfileId() {
+  let id;
+  do { id = 'p' + Date.now().toString(36) + (profileSeq++); } while (cfg.profiles.some(p => p.id === id));
+  return id;
+}
+function newProfile(name, roster) {
+  return { id: newProfileId(), name: name, roster: roster || [], probs: {}, extras: [] };
+}
+function activeProfile() {
+  if (!cfg.profiles.length) cfg.profiles.push(newProfile('原版', []));
+  let p = cfg.profiles.find(x => x.id === cfg.activeId);
+  if (!p) { p = cfg.profiles[0]; cfg.activeId = p.id; }
+  return p;
+}
+function applyActiveToLive() {
+  const p = activeProfile();
+  cfg.roster = Array.isArray(p.roster) ? p.roster : [];
+  cfg.probs = (p.probs && typeof p.probs === 'object') ? p.probs : {};
+  cfg.extras = Array.isArray(p.extras) ? p.extras : [];
+}
+function persistActive() {
+  if (!cfg.profiles || !cfg.profiles.length) return;
+  const p = activeProfile();
+  p.roster = cfg.roster;
+  p.probs = cfg.probs;
+  p.extras = cfg.extras;
+}
+// 某个配置里「已设过非默认概率」的人数（用于设置页展示）
+function profileHiddenCount(p) {
+  let n = 0;
+  const probs = p.probs || {};
+  for (const k of Object.keys(probs)) {
+    const w = DEFAULTS.tiers[probs[k]];
+    if (w !== undefined && w !== 1) n++;
+  }
+  return n;
+}
+
 function saveCfg() {
-  try { localStorage.setItem(DEFAULTS.storageKey, JSON.stringify(cfg)); } catch (e) { /* 隐私模式等场景静默降级 */ }
+  persistActive();
+  try {
+    const snap = Object.assign({}, cfg);       // 顶层不再重复写当前名单，减小体积
+    delete snap.roster; delete snap.probs; delete snap.extras;
+    localStorage.setItem(DEFAULTS.storageKey, JSON.stringify(snap));
+  } catch (e) { /* 隐私模式等场景静默降级 */ }
+}
+function normalizeProfiles(d) {
+  if (!Array.isArray(d.profiles) || !d.profiles.length) return null;
+  return d.profiles.filter(p => p && typeof p === 'object').map((p, i) => ({
+    id: (typeof p.id === 'string' && p.id) ? p.id : 'p' + i,
+    name: String(p.name || ('配置 ' + (i + 1))).slice(0, 16),
+    roster: Array.isArray(p.roster) ? p.roster.filter(x => typeof x === 'string') : [],
+    probs: (p.probs && typeof p.probs === 'object') ? p.probs : {},
+    extras: Array.isArray(p.extras) ? p.extras.filter(x => x && typeof x.name === 'string') : []
+  }));
 }
 function loadCfg() {
+  let d = null;
   try {
     const raw = localStorage.getItem(DEFAULTS.storageKey);
-    if (!raw) return;
-    const d = JSON.parse(raw);
-    for (const k of ['speed','glide','stay','sound','volume','pwGeneral','pwAdvanced','density','bgColor','bgOpacity','fontColor','autoInk','fontFamily','titlePx','titleWeight','resultScale','resultWeight','spherePx','gestureClicks','gestureSteps']) {
-      if (d[k] !== undefined && d[k] !== null) cfg[k] = d[k];
-    }
-    if (Array.isArray(d.gestureSeq) && d.gestureSeq.length) cfg.gestureSeq = d.gestureSeq.filter(x => typeof x === 'string').slice(0, 4);
-    if (Array.isArray(d.roster)) cfg.roster = d.roster.filter(x => typeof x === 'string');
-    if (d.probs && typeof d.probs === 'object') cfg.probs = d.probs;
-    if (Array.isArray(d.extras)) cfg.extras = d.extras.filter(x => x && typeof x.name === 'string');
-  } catch (e) { /* 损坏数据回退默认 */ }
+    if (raw) d = JSON.parse(raw);
+  } catch (e) { d = null; }
+  if (!d) return;
+  for (const k of ['speed','glide','stay','sound','volume','pwGeneral','pwAdvanced','density','bgColor','bgOpacity','fontColor','autoInk','fontFamily','titlePx','titleWeight','resultScale','resultWeight','spherePx','gestureClicks','gestureSteps']) {
+    if (d[k] !== undefined && d[k] !== null) cfg[k] = d[k];
+  }
+  if (Array.isArray(d.gestureSeq) && d.gestureSeq.length) cfg.gestureSeq = d.gestureSeq.filter(x => typeof x === 'string').slice(0, 4);
+  const ps = normalizeProfiles(d);
+  if (ps) {
+    cfg.profiles = ps;
+    cfg.activeId = (d.activeId && ps.some(p => p.id === d.activeId)) ? d.activeId : ps[0].id;
+  } else {
+    // 旧版本数据（单套名单）迁移为「原版」配置
+    cfg.profiles = [{
+      id: 'p0', name: '原版',
+      roster: Array.isArray(d.roster) ? d.roster.filter(x => typeof x === 'string') : [],
+      probs: (d.probs && typeof d.probs === 'object') ? d.probs : {},
+      extras: Array.isArray(d.extras) ? d.extras.filter(x => x && typeof x.name === 'string') : []
+    }];
+    cfg.activeId = 'p0';
+  }
+  if (Array.isArray(d.roster) && d.roster.length && !cfg.profiles.some(p => p.roster.length)) {
+    cfg.profiles[0].roster = d.roster.filter(x => typeof x === 'string');
+  }
+  applyActiveToLive();
 }
 
 /* ============================================================
@@ -1056,6 +1179,8 @@ const picker = (() => {
     if (!list.length) return '（名单为空）';
     let total = 0;
     const ws = list.map(n => { const w = weightOf(n); total += w; return w; });
+    // 全部是「永远抽不到」（总权重 0）时兜底等概率，避免点了开始却抽不出人
+    if (total <= 0) return list[Math.floor(Math.random() * list.length)];
     let r = Math.random() * total;
     for (let i = 0; i < list.length; i++) { r -= ws[i]; if (r < 0) return list[i]; }
     return list[list.length - 1];
@@ -1309,6 +1434,139 @@ const secret = (() => {
 })();
 
 /* ============================================================
+ * profiles：多套配置（各自独立的名单与隐藏概率）+ 主页切换开关
+ * ============================================================ */
+const profiles = (() => {
+  const bar = document.getElementById('profileSwitch');
+  let boxFor = '';   // 名单输入框当前展示的是哪套配置
+
+  function canSwitch() { return sphere.state === 'idle' && !result.visible; }
+  function msg(t) { document.getElementById('profileMsg').textContent = t; }
+
+  // 主页右上角的胶囊开关：每个配置一颗按钮，当前项高亮
+  function renderSwitch() {
+    bar.textContent = '';
+    const lab = document.createElement('span');
+    lab.className = 'psLabel';
+    lab.textContent = '配置';
+    bar.appendChild(lab);
+    cfg.profiles.forEach(p => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'psBtn' + (p.id === cfg.activeId ? ' active' : '');
+      b.textContent = p.name;
+      const hidden = profileHiddenCount(p);
+      b.title = p.name + ' · ' + p.roster.length + ' 人' + (hidden ? ' · 已设概率 ' + hidden + ' 人' : '');
+      b.disabled = !canSwitch();
+      b.addEventListener('click', () => switchTo(p.id));
+      bar.appendChild(b);
+    });
+  }
+
+  function switchTo(id) {
+    if (id === cfg.activeId || !canSwitch()) return;
+    if (!cfg.profiles.some(p => p.id === id)) return;
+    cfg.activeId = id;
+    applyActiveToLive();
+    saveCfg();
+    sphere.rebuild();
+    updateRosterUI();
+    renderSwitch();
+    if (settings.isOpen()) settings.syncAll();
+    else if (advancedUnlocked) renderProbList();
+    sfx.click();
+  }
+
+  // 设置页「配置」块与主页开关同步
+  function syncUI() {
+    const sel = document.getElementById('cfgProfileSelect');
+    sel.textContent = '';
+    cfg.profiles.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = p.name;
+      if (p.id === cfg.activeId) o.selected = true;
+      sel.appendChild(o);
+    });
+    const p = activeProfile();
+    const hidden = profileHiddenCount(p);
+    document.getElementById('profileMeta').textContent =
+      p.roster.length + ' 人' + (hidden ? ' · 已设概率 ' + hidden + ' 人' : ' · 未设概率');
+    // 切配置后名单输入框要跟着换成当前配置的名单，避免显示上一套的旧内容
+    if (boxFor !== cfg.activeId) {
+      document.getElementById('rosterTextarea').value = cfg.roster.join('\n');
+      boxFor = cfg.activeId;
+    }
+    renderSwitch();
+  }
+
+  function uniqueName(base) {
+    base = String(base || '').trim().slice(0, 16) || '配置';
+    if (!cfg.profiles.some(p => p.name === base)) return base;
+    let i = 2;
+    while (cfg.profiles.some(p => p.name === base + ' ' + i)) i++;
+    return base + ' ' + i;
+  }
+
+  function create(name, from) {
+    const p = newProfile(uniqueName(name), []);
+    if (from) {
+      p.roster = from.roster.slice();
+      p.probs = Object.assign({}, from.probs);
+      p.extras = from.extras.map(e => ({ name: e.name, tier: e.tier }));
+    }
+    cfg.profiles.push(p);
+    cfg.activeId = p.id;
+    applyActiveToLive();
+    saveCfg(); sphere.rebuild(); updateRosterUI(); syncUI();
+    if (advancedUnlocked) renderProbList();
+    sfx.click();
+    return p;
+  }
+
+  function remove() {
+    const p = activeProfile();
+    if (cfg.profiles.length <= 1) { msg('至少保留一个配置'); return; }
+    cfg.profiles = cfg.profiles.filter(x => x.id !== p.id);
+    cfg.activeId = cfg.profiles[0].id;
+    applyActiveToLive();
+    saveCfg(); sphere.rebuild(); updateRosterUI(); syncUI();
+    if (advancedUnlocked) renderProbList();
+    msg('已删除配置「' + p.name + '」，已切到「' + activeProfile().name + '」');
+  }
+
+  function rename(name) {
+    name = String(name || '').trim().slice(0, 16);
+    if (!name) { msg('名称不能为空'); return; }
+    if (cfg.profiles.some(x => x.name === name && x.id !== cfg.activeId)) { msg('已有同名配置，请换一个名称'); return; }
+    activeProfile().name = name;
+    document.getElementById('profileRenameInput').value = '';
+    saveCfg(); syncUI();
+    msg('已重命名为「' + name + '」');
+  }
+
+  // 恢复原版：120 人示例名单 + 全部等概率
+  // 强制把名单输入框刷成当前配置的内容（同一配置内部换名单时用）
+  function refreshRosterBox() {
+    document.getElementById('rosterTextarea').value = cfg.roster.join('\n');
+    boxFor = cfg.activeId;
+  }
+
+  function restoreOriginal() {
+    let p = cfg.profiles.find(x => x.name === '原版');
+    if (!p) { p = newProfile('原版', []); cfg.profiles.unshift(p); }
+    p.roster = defaultRoster();
+    p.probs = {}; p.extras = [];
+    cfg.activeId = p.id;
+    applyActiveToLive();
+    saveCfg(); sphere.rebuild(); updateRosterUI(); syncUI(); refreshRosterBox();
+    if (advancedUnlocked) renderProbList();
+    msg('已恢复原版：' + p.roster.length + ' 人，全部等概率');
+  }
+
+  return { renderSwitch, syncUI, switchTo, create, remove, rename, restoreOriginal, canSwitch };
+})();
+
+/* ============================================================
  * settings：设置面板 UI（通用 / 个性化 / 高级）
  * ============================================================ */
 let advancedUnlocked = false;
@@ -1363,6 +1621,7 @@ const settings = (() => {
     $('cfgGestureSteps').value = String(cfg.gestureSteps);
     normalizeGestureSeq();
     renderGestureRows();
+    profiles.syncUI();
     updateRosterUI();
     applyPersonal();
   }
@@ -1457,6 +1716,24 @@ const settings = (() => {
     saveCfg();
   });
   $('cfgVolume').addEventListener('change', () => sfx.win());
+
+  /* ---- 配置（名单 + 隐藏概率） ---- */
+  $('cfgProfileSelect').addEventListener('change', e => profiles.switchTo(e.target.value));
+  $('profileNewBtn').addEventListener('click', () => {
+    const p = profiles.create('配置 ' + (cfg.profiles.length + 1), null);
+    $('profileMsg').textContent = '已新建空配置「' + p.name + '」，请导入名单';
+  });
+  $('profileCopyBtn').addEventListener('click', () => {
+    const src = activeProfile();
+    const p = profiles.create(src.name + ' 副本', src);
+    $('profileMsg').textContent = '已复制为「' + p.name + '」，名单与概率一并带过来';
+  });
+  $('profileRenameBtn').addEventListener('click', () => profiles.rename($('profileRenameInput').value));
+  $('profileRenameInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); profiles.rename($('profileRenameInput').value); }
+  });
+  $('profileDelBtn').addEventListener('click', () => profiles.remove());
+  $('profileResetBtn').addEventListener('click', () => profiles.restoreOriginal());
 
   /* ---- 名单管理 ---- */
   $('rosterApply').addEventListener('click', () => setRoster(parseRoster($('rosterTextarea').value)));
@@ -1641,6 +1918,8 @@ function renderProbList() {
     let rest = 10000 - hundredths.reduce((a, b) => a + b, 0);
     const order = raw.map((v, i) => [v - Math.floor(v), i]).sort((a, b) => b[0] - a[0]);
     for (let k = 0; k < rest; k++) hundredths[order[k % order.length][1]]++;
+  } else if (all.length) {
+    hundredths = all.map(() => 0);   // 全部「永远抽不到」：概率均为 0
   }
   if (!all.length) {
     const empty = document.createElement('div');
@@ -1682,7 +1961,9 @@ function renderProbList() {
     row.appendChild(nameSpan); row.appendChild(sel); row.appendChild(pct); row.appendChild(del);
     listEl.appendChild(row);
   }
-  document.getElementById('probTotal').textContent = all.length ? (sum / 100).toFixed(2) + '%' : '—';
+  document.getElementById('probTotal').textContent = !all.length ? '—'
+    : (total > 0 ? (sum / 100).toFixed(2) + '%' : '全部「永远抽不到」，已兜底等概率');
+  profiles.syncUI();   // 概率变更后同步「配置」块的已设概率人数与主页开关提示
 }
 (function initProbExtras() {
   const sel = document.getElementById('extraTierSelect');
@@ -1724,6 +2005,7 @@ function syncMainBtn() {
   const s = sphere.state;
   mainBtn.textContent = s === 'spinning' ? '暂停' : (s === 'decelerating' ? '减速中' : '开始');
   mainBtn.disabled = (s === 'decelerating' || s === 'result');
+  profiles.renderSwitch();   // 抽奖进行中把配置开关置为不可点
 }
 mainBtn.addEventListener('click', () => {
   const now = performance.now();
@@ -1750,8 +2032,11 @@ document.addEventListener('keydown', e => {
  * 启动
  * ============================================================ */
 loadCfg();
-if (!cfg.roster.length && !localStorage.getItem(DEFAULTS.storageKey)) {
-  cfg.roster = defaultRoster();       // 首次运行载入 120 人示例名单
+if (!cfg.profiles.length) {
+  // 首次运行：建立「原版」配置并载入 120 人示例名单（等概率）
+  cfg.profiles = [{ id: 'p0', name: '原版', roster: defaultRoster(), probs: {}, extras: [] }];
+  cfg.activeId = 'p0';
+  applyActiveToLive();
   saveCfg();
 }
 try { bgImage = localStorage.getItem(BG_KEY) || null; } catch (e) { bgImage = null; }
